@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./App.css";
+import DragDropDemo from "./DragDropDemo";
 
 type TableResponse = {
   filename: string;
@@ -11,6 +12,7 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"; // FastAPI URL
 
 function App() {
+  const [showDemo, setShowDemo] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [table, setTable] = useState<TableResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,8 +60,49 @@ function App() {
     }
   };
 
+  if (showDemo) {
+    return (
+      <div>
+        <button
+          onClick={() => setShowDemo(false)}
+          style={{
+            position: "fixed",
+            top: "20px",
+            right: "20px",
+            padding: "10px 20px",
+            backgroundColor: "rgba(255, 255, 255, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            borderRadius: "8px",
+            cursor: "pointer",
+            zIndex: 1000,
+          }}
+        >
+          View Uploader
+        </button>
+        <DragDropDemo />
+      </div>
+    );
+  }
+
   return (
     <>
+      <button
+        onClick={() => setShowDemo(true)}
+        style={{
+          position: "fixed",
+          top: "20px",
+          right: "20px",
+          padding: "10px 20px",
+          backgroundColor: "rgba(255, 255, 255, 0.1)",
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          borderRadius: "8px",
+          cursor: "pointer",
+          zIndex: 1000,
+        }}
+      >
+        View Demo
+      </button>
+
       <h1>Spreadsheet Uploader</h1>
 
       <div className="card" style={{ marginTop: "1rem" }}>
