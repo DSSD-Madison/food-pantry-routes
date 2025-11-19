@@ -6,7 +6,7 @@ from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 import pandas as pd
 
 
-dataset = pd.read_excel("data.xlsx")
+dataset = pd.read_excel("Flags_4_Food_data.xlsx")
 addresses = dataset["Address"]  + " " + dataset["City"] + " " + dataset["State"]
 
 def geocode_addresses(address_list):
@@ -66,6 +66,7 @@ print(results_df.head())
 
 # elbow method
 import matplotlib.pyplot as plt
+import matplotlib
 
 # We will test K from 1 to 10
 max_k = 10
@@ -85,10 +86,25 @@ plt.xticks(range(1, max_k + 1))
 plt.grid(True)
 plt.show()
 
+# List of colors for different clusters
+# cluster_colors = ["blue", "green", "red", "purple", "cyan"]
+print("Working till here 1")
+cmap = matplotlib.colormaps['tab20']
+cluster_colors = [cmap(i / N_CLUSTERS) for i in range(N_CLUSTERS)]
+print("Working till here 2")
+
 latitude = []
 longitude = []
-for i in data:
-  latitude.append(i.get("latitude"))
-  longitude.append(i.get("longitude"))
-plt.plot(latitude,longitude,'o')
+colors = []
+for i in range(len(data)):
+  latitude.append(data[i].get("latitude"))
+  longitude.append(data[i].get("longitude"))
+
+  # adding the respective color to the colors list depending on the cluster it belongs to
+  cluster = int(cluster_labels[i])
+  color = cluster_colors[cluster]
+  colors.append(color)
+
+# plt.plot(latitude,longitude,'o')
+plt.scatter(latitude, longitude, c=colors)
 plt.show()
