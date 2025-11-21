@@ -58,3 +58,17 @@ async def upload_spreadsheet(
         "columns": list(df.columns),
         "groups": groups,
     }
+
+@app.get("/get-spreadsheet/{filename}")
+async def get_spreadsheet(filename: str) -> dict[str, Any]:
+    if filename not in stored_spreadsheets:
+        raise HTTPException(status_code=404, detail="Spreadsheet not found")
+
+    df = stored_spreadsheets[filename]
+
+    return {
+        "filename": filename,
+        "columns": list(df.columns),
+        "rows": df.to_dict(orient="records"),
+    }
+
