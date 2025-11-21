@@ -2,6 +2,8 @@ from typing import Any
 from io import BytesIO
 import math
 
+import bpn_osm_and_kmeans
+
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,15 +48,8 @@ async def upload_spreadsheet(
     groups: list[list[dict[str, Any]]] = []
     start = 0
 
-    for _ in range(number_of_groups):
-        if start >= total_rows:
-            break
-        end = min(start + group_size, total_rows)
-        groups.append(df.iloc[start:end].to_dict(orient="records"))
-        start = end
+    addresses = df["Address"]  + " " + df["City"] + " " + df["State"]
 
-    return {
-        "filename": file.filename,
-        "columns": list(df.columns),
-        "groups": groups,
-    }
+    geocoded_data = bpn_osm_and_kmeans.geocode_addresses(addresses)
+    return bpn_osm_and_kmeans.Kmeans_addresses(number_of_groups, geocoded_data)
+
