@@ -1,6 +1,7 @@
 FRONTEND_DIR := frontend
 BACKEND_DIR := backend
 API_URL := http://localhost:8000
+VENV_DIR := $(BACKEND_DIR)/.venv
 
 .PHONY: run frontend backend
 
