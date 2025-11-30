@@ -10,6 +10,15 @@ dataset = pd.read_excel("Flags_4_Food_data.xlsx")
 addresses = dataset["Address"]  + " " + dataset["City"] + " " + dataset["State"]
 
 def geocode_addresses(address_list):
+  """
+    Gives the latitudes and longitudes of a list of locations
+
+    Args:
+        address_list (<class 'pandas.core.series.Series'>): one-dimensional labeled array of location names
+
+    Returns:
+        list: List of dictionaries which contain information of the latitude and longitutde of each location
+    """
   geolocator = Nominatim(user_agent = "BNNP_Flags",timeout = 10) #not including timeout = 10 was giving a lot of errors
   geocoded_locations=[]
   try:
@@ -31,32 +40,46 @@ def geocode_addresses(address_list):
             print(f"ERROR:   '{address}'  ({e})")
   return geocoded_locations
 
-
+N_CLUSTERS = 5
 
 data = geocode_addresses(addresses)
-print(data)
+print("geocode_addresses length: ", len(data))
+print("geocode_addresses: ", data)
 
 from sklearn.cluster import KMeans
 import numpy as np
 
-x = []
-for i in data:
-  x.append([i.get("latitude"),i.get("longitude")])
-x= np.array(x)
+def get_groups(data, n_clusters = N_CLUSTERS):
+  """
+    Creates the clusters of locations
 
-N_CLUSTERS = 5
+    Args:
+        address_list (<class 'pandas.core.series.Series'>): one-dimensional labeled array of location names
+
+    Returns:
+        list: List of dictionaries which contain information of the latitude and longitutde of each location
+    """
+
+  x = []
+  for i in data:
+    x.append([i.get("latitude"),i.get("longitude")])
+  x= np.array(x)
 
 
-# idk what random_state does but keep it for now
-kmeans = KMeans(n_clusters=N_CLUSTERS, random_state=42, n_init=10)
-kmeans.fit(x)
+  # idk what random_state does but keep it for now
+  kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+  kmeans.fit(x)
 
 
-cluster_labels = kmeans.labels_
-cluster_centers = kmeans.cluster_centers_
+  cluster_labels = kmeans.labels_
+  cluster_centers = kmeans.cluster_centers_
 
+  return (cluster_labels, cluster_centers, x)
 
-print(cluster_labels)
+(cluster_labels, cluster_centers, x) = get_groups(data)
+
+print("cluster_labels: ", cluster_labels)
+print("Size of cluster_labels", len(cluster_labels))
 print(cluster_centers)
 
 

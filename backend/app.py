@@ -50,6 +50,34 @@ async def upload_spreadsheet(
 
     addresses = df["Address"]  + " " + df["City"] + " " + df["State"]
 
+    print("Calling geocode_addresses")
+    # getting the latitude and longitutde of all the locations
     geocoded_data = bpn_osm_and_kmeans.geocode_addresses(addresses)
-    return bpn_osm_and_kmeans.Kmeans_addresses(number_of_groups, geocoded_data)
+    print("geocoded_data: ", geocoded_data)
+    
+    cluster_labels = bpn_osm_and_kmeans.get_groups(geocoded_data, number_of_groups)[0]
+
+    groups = [[] for _ in range(len(geocoded_data))]
+
+    for i in range(len(geocoded_data)):
+        location_dict = {"Location" : geocoded_data[i]["full_result"]}
+
+        group = int(cluster_labels[i])
+
+        groups[group].append(location_dict)
+
+    # return bpn_osm_and_kmeans.Kmeans_addresses(number_of_groups, geocoded_data)
+
+    # for _ in range(number_of_groups):
+    #         if start >= total_rows:
+    #             break
+    #         end = min(start + group_size, total_rows)
+    #         groups.append(df.iloc[start:end].to_dict(orient="records"))
+    #         start = end
+
+    return {
+        "filename": file.filename,
+        "columns": list(df.columns),
+        "groups": groups,
+    }
 
