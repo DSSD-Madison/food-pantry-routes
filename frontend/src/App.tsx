@@ -5,39 +5,49 @@ import DragDropDemo from "./DragDropDemo";
 type TableResponse = {
   filename: string;
   columns: string[];
-  rows: Record<string, any>[];
+  groups: Record<string, any>[][];
 };
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"; // FastAPI URL
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 function App() {
-  const [showDemo, setShowDemo] = useState(true);
   const [file, setFile] = useState<File | null>(null);
+  const [numGroups, setNumGroups] = useState<number>(2);
   const [table, setTable] = useState<TableResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ------------------------------
+  // Handle file selection
+  // ------------------------------
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     setFile(f);
-    setTable(null);
     setError(null);
   };
 
+  // ------------------------------
+  // Handle spreadsheet upload
+  // ------------------------------
   const handleUpload = async () => {
     if (!file) {
       setError("Please choose a CSV or Excel file first.");
       return;
     }
 
+    if (!numGroups || numGroups <= 0) {
+      setError("Please enter a valid number of groups.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    setTable(null);
 
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("number_of_groups", numGroups.toString());
 
       const res = await fetch(`${API_BASE_URL}/upload-spreadsheet`, {
         method: "POST",
@@ -52,6 +62,8 @@ function App() {
       }
 
       const data = (await res.json()) as TableResponse;
+
+      // 🔥 Switch UI to DragDropDemo after upload
       setTable(data);
     } catch (err: any) {
       setError(err.message || "Something went wrong while uploading.");
@@ -60,62 +72,50 @@ function App() {
     }
   };
 
-  if (showDemo) {
+  // ----------------------------------------------------
+  // If table exists → Show DragDropDemo instead of upload UI
+  // ----------------------------------------------------
+  if (table) {
     return (
-      <div>
-        <button
-          onClick={() => setShowDemo(false)}
-          style={{
-            position: "fixed",
-            top: "20px",
-            right: "20px",
-            padding: "10px 20px",
-            backgroundColor: "rgba(255, 255, 255, 0.1)",
-            border: "1px solid rgba(255, 255, 255, 0.2)",
-            borderRadius: "8px",
-            cursor: "pointer",
-            zIndex: 1000,
-          }}
-        >
-          View Uploader
-        </button>
-        <DragDropDemo />
-      </div>
+      <DragDropDemo
+        filename={table.filename}
+        columns={table.columns}
+        groups={table.groups}
+      />
     );
   }
 
+  // ----------------------------------------------------
+  // Upload UI
+  // ----------------------------------------------------
   return (
-    <>
-      <button
-        onClick={() => setShowDemo(true)}
-        style={{
-          position: "fixed",
-          top: "20px",
-          right: "20px",
-          padding: "10px 20px",
-          backgroundColor: "rgba(255, 255, 255, 0.1)",
-          border: "1px solid rgba(255, 255, 255, 0.2)",
-          borderRadius: "8px",
-          cursor: "pointer",
-          zIndex: 1000,
-        }}
-      >
-        View Demo
-      </button>
-
+    <div>
       <h1>Spreadsheet Uploader</h1>
 
       <div className="card" style={{ marginTop: "1rem" }}>
         <h2>Upload a spreadsheet</h2>
+
         <input
           type="file"
           accept=".csv,.xlsx,.xls"
           onChange={handleFileChange}
         />
+
+        <div style={{ marginTop: "1rem" }}>
+          <label>Number of Groups:</label>
+          <input
+            type="number"
+            value={numGroups}
+            onChange={(e) => setNumGroups(Number(e.target.value))}
+            style={{ marginLeft: "0.5rem", width: "80px" }}
+            min={1}
+          />
+        </div>
+
         <button
           onClick={handleUpload}
           disabled={!file || loading}
-          style={{ marginLeft: "0.5rem" }}
+          style={{ marginLeft: "0.5rem", marginTop: "1rem" }}
         >
           {loading ? "Uploading…" : "Upload & Process"}
         </button>
@@ -129,37 +129,10 @@ function App() {
         {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
       </div>
 
-      {table && (
-        <div
-          className="card"
-          style={{ marginTop: "1rem", maxWidth: "100%", overflowX: "auto" }}
-        >
-          <h2>Parsed Table ({table.filename})</h2>
-          <table>
-            <thead>
-              <tr>
-                {table.columns.map((col) => (
-                  <th key={col}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {table.rows.map((row, idx) => (
-                <tr key={idx}>
-                  {table.columns.map((col) => (
-                    <td key={col}>{row[col]?.toString?.() ?? ""}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
       <p className="read-the-docs">
         Backend: <code>{API_BASE_URL}</code>
       </p>
-    </>
+    </div>
   );
 }
 

@@ -68,17 +68,9 @@ async def upload_spreadsheet(
 
         groups[group].append(location_dict)
     
-    # Generating the graph of the clusters
     # bpn_osm_and_kmeans.generate_kmeans_grouping_graph(geocoded_data, number_of_groups, cluster_labels)
 
     # return bpn_osm_and_kmeans.Kmeans_addresses(number_of_groups, geocoded_data)
-
-    # for _ in range(number_of_groups):
-    #         if start >= total_rows:
-    #             break
-    #         end = min(start + group_size, total_rows)
-    #         groups.append(df.iloc[start:end].to_dict(orient="records"))
-    #         start = end
 
     return {
         "filename": file.filename,
