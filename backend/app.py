@@ -33,6 +33,7 @@ async def upload_spreadsheet(
             df = df.dropna(axis=1, how="all").loc[:, (df != "").any()]
         else:
             df = pd.read_excel(BytesIO(contents))
+            df = df.dropna(axis=1, how="all").loc[:, (df != "").any()]
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read spreadsheet: {e}")
 
@@ -53,6 +54,11 @@ async def upload_spreadsheet(
         groups.append(df.iloc[start:end].to_dict(orient="records"))
         start = end
 
+    print({
+        "filename": file.filename,
+        "columns": list(df.columns),
+        "groups": groups,
+    })
     return {
         "filename": file.filename,
         "columns": list(df.columns),
