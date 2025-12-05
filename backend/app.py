@@ -35,6 +35,8 @@ async def upload_spreadsheet(
             df = df.dropna(axis=1, how="all").loc[:, (df != "").any()]
         else:
             df = pd.read_excel(BytesIO(contents))
+            df = df.dropna(axis=1, how="all").loc[:, (df != "").any()]
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read spreadsheet: {e}")
 
@@ -65,6 +67,9 @@ async def upload_spreadsheet(
         group = int(cluster_labels[i])
 
         groups[group].append(location_dict)
+    
+    # Generating the graph of the clusters
+    # bpn_osm_and_kmeans.generate_kmeans_grouping_graph(geocoded_data, number_of_groups, cluster_labels)
 
     # return bpn_osm_and_kmeans.Kmeans_addresses(number_of_groups, geocoded_data)
 

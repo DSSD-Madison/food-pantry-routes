@@ -1,13 +1,11 @@
-
-
 import time
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 import pandas as pd
 
 
-dataset = pd.read_excel("Flags_4_Food_data.xlsx")
-addresses = dataset["Address"]  + " " + dataset["City"] + " " + dataset["State"]
+# dataset = pd.read_excel("Flags_4_Food_data.xlsx")
+# addresses = dataset["Address"]  + " " + dataset["City"] + " " + dataset["State"]
 
 def geocode_addresses(address_list):
   """
@@ -40,16 +38,14 @@ def geocode_addresses(address_list):
             print(f"ERROR:   '{address}'  ({e})")
   return geocoded_locations
 
-N_CLUSTERS = 5
-
-data = geocode_addresses(addresses)
-print("geocode_addresses length: ", len(data))
-print("geocode_addresses: ", data)
+# data = geocode_addresses(addresses)
+# print("geocode_addresses length: ", len(data))
+# print("geocode_addresses: ", data)
 
 from sklearn.cluster import KMeans
 import numpy as np
 
-def get_groups(data, n_clusters = N_CLUSTERS):
+def get_groups(data, n_clusters):
   """
     Creates the clusters of locations
 
@@ -76,58 +72,61 @@ def get_groups(data, n_clusters = N_CLUSTERS):
 
   return (cluster_labels, cluster_centers, x)
 
-(cluster_labels, cluster_centers, x) = get_groups(data)
+# (cluster_labels, cluster_centers, x) = get_groups(data)
 
-print("cluster_labels: ", cluster_labels)
-print("Size of cluster_labels", len(cluster_labels))
-print(cluster_centers)
+# print("cluster_labels: ", cluster_labels)
+# print("Size of cluster_labels", len(cluster_labels))
+# print(cluster_centers)
 
 
-results_df = pd.DataFrame(data)
-results_df['cluster'] = cluster_labels
-print(results_df.head())
+# results_df = pd.DataFrame(data)
+# results_df['cluster'] = cluster_labels
+# print(results_df.head())
 
 # elbow method
 import matplotlib.pyplot as plt
 import matplotlib
 
+# Elbow Method for optimal K
 # We will test K from 1 to 10
-max_k = 10
-inertia = []
+# max_k = 10
+# inertia = []
 
-for k in range(1, max_k + 1):
-    kmeans_test = KMeans(n_clusters=k, random_state=42, n_init=10)
-    kmeans_test.fit(x)
-    inertia.append(kmeans_test.inertia_)
+# for k in range(1, max_k + 1):
+#     kmeans_test = KMeans(n_clusters=k, random_state=42, n_init=10)
+#     kmeans_test.fit(x)
+#     inertia.append(kmeans_test.inertia_)
 
-plt.figure(figsize=(10, 6))
-plt.plot(range(1, max_k + 1), inertia, marker='o')
-plt.title('Elbow Method for Optimal K')
-plt.xlabel('Number of Clusters (K)')
-plt.ylabel('Inertia')
-plt.xticks(range(1, max_k + 1))
-plt.grid(True)
-plt.show()
+# plt.figure(figsize=(10, 6))
+# plt.plot(range(1, max_k + 1), inertia, marker='o')
+# plt.title('Elbow Method for Optimal K')
+# plt.xlabel('Number of Clusters (K)')
+# plt.ylabel('Inertia')
+# plt.xticks(range(1, max_k + 1))
+# plt.grid(True)
+# plt.show()
 
-# List of colors for different clusters
-# cluster_colors = ["blue", "green", "red", "purple", "cyan"]
-print("Working till here 1")
-cmap = matplotlib.colormaps['tab20']
-cluster_colors = [cmap(i / N_CLUSTERS) for i in range(N_CLUSTERS)]
-print("Working till here 2")
+def generate_kmeans_grouping_graph(geocode_address_data, n_clusters, cluster_labels):
 
-latitude = []
-longitude = []
-colors = []
-for i in range(len(data)):
-  latitude.append(data[i].get("latitude"))
-  longitude.append(data[i].get("longitude"))
+  # List of colors for different clusters
+  # cluster_colors = ["blue", "green", "red", "purple", "cyan"]
+  # print("Working till here 1")
+  cmap = matplotlib.colormaps['tab20']
+  cluster_colors = [cmap(i / n_clusters) for i in range(n_clusters)]
+  # print("Working till here 2")
 
-  # adding the respective color to the colors list depending on the cluster it belongs to
-  cluster = int(cluster_labels[i])
-  color = cluster_colors[cluster]
-  colors.append(color)
+  latitude = []
+  longitude = []
+  colors = []
+  for i in range(len(geocode_address_data)):
+    latitude.append(geocode_address_data[i].get("latitude"))
+    longitude.append(geocode_address_data[i].get("longitude"))
 
-# plt.plot(latitude,longitude,'o')
-plt.scatter(latitude, longitude, c=colors)
-plt.show()
+    # adding the respective color to the colors list depending on the cluster it belongs to
+    cluster = int(cluster_labels[i])
+    color = cluster_colors[cluster]
+    colors.append(color)
+
+  # plt.plot(latitude,longitude,'o')
+  plt.scatter(latitude, longitude, c=colors)
+  plt.show()
