@@ -179,3 +179,60 @@
   font-weight: 500;
   color: rgba(255, 255, 255, 0.8);
 }
+
+/* Light mode overrides */
+@media (prefers-color-scheme: light) {
+  .card-container {
+    background-color: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .card-container:hover {
+    box-shadow: 0 2px 8px rgba(100, 108, 255, 0.15);
+  }
+
+  .card-title {
+    color: #535bf2;
+    border-bottom: 1px solid rgba(100, 108, 255, 0.3);
+  }
+
+  .empty-card-placeholder {
+    color: rgba(0, 0, 0, 0.4);
+    border: 1px dashed rgba(0, 0, 0, 0.2);
+  }
+
+  .card-count {
+    color: rgba(0, 0, 0, 0.6);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .route-item {
+    background-color: rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+  }
+
+  .route-item:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+    border-color: rgba(100, 108, 255, 0.5);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .route-item.dragging {
+    background-color: rgba(100, 108, 255, 0.15);
+    border-color: #646cff;
+    box-shadow: 0 4px 16px rgba(100, 108, 255, 0.3);
+  }
+
+  .item-name {
+    color: rgba(0, 0, 0, 0.9);
+  }
+
+  .item-details {
+    color: rgba(0, 0, 0, 0.7);
+  }
+
+  .item-priority {
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.8);
+  }
+}
