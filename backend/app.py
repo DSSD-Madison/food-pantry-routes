@@ -59,7 +59,7 @@ async def upload_spreadsheet(
     
     cluster_labels = bpn_osm_and_kmeans.get_groups(geocoded_data, number_of_groups)[0]
 
-    groups = [[] for _ in range(len(geocoded_data))]
+    groups = [[] for _ in range(number_of_groups)]
 
     for i in range(len(geocoded_data)):
         location_dict = {"Location" : geocoded_data[i]["full_result"]}

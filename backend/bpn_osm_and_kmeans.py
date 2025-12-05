@@ -2,6 +2,9 @@ import time
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 import pandas as pd
+from sklearn.cluster import KMeans
+import numpy as np
+
 
 
 # dataset = pd.read_excel("Flags_4_Food_data.xlsx")
@@ -21,8 +24,6 @@ def geocode_addresses(address_list):
   geocoded_locations=[]
   try:
     for address in address_list:
-      if len(geocoded_locations) > 20: #remove only for testing
-        break
       address_temp = geolocator.geocode(address)
       if address_temp:
         print(f"Found, {address} at {address_temp.latitude} and {address_temp.longitude}")
@@ -41,9 +42,6 @@ def geocode_addresses(address_list):
 # data = geocode_addresses(addresses)
 # print("geocode_addresses length: ", len(data))
 # print("geocode_addresses: ", data)
-
-from sklearn.cluster import KMeans
-import numpy as np
 
 def get_groups(data, n_clusters):
   """

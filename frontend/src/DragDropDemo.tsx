@@ -118,7 +118,7 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
       items: group.map((row, rowIndex) => ({
         id: `g${index}-row${rowIndex}`,
         name: row["name"] || row["Name"] || row[columns[0]] || "Unknown",
-        address: row["address"] || row["Address"] || "",
+        address: row["location"] || row["Location"] || "",
         contact: row["contact"] || row["Contact"] || "",
         priority: Number(row["priority"] || row["Priority"] || rowIndex + 1),
         raw: row, // keep original row for exporting
