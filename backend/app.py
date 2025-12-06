@@ -3,6 +3,7 @@ from io import BytesIO
 import math
 
 import bpn_osm_and_kmeans
+import elbow_method
 
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
@@ -57,7 +58,9 @@ async def upload_spreadsheet(
     geocoded_data = bpn_osm_and_kmeans.geocode_addresses(addresses)
     print("geocoded_data: ", geocoded_data)
     
-    cluster_labels = bpn_osm_and_kmeans.get_groups(geocoded_data, number_of_groups)[0]
+    kmeans_grp_data = bpn_osm_and_kmeans.get_groups(geocoded_data, number_of_groups)[0]
+    cluster_labels = kmeans_grp_data[0]
+    x = kmeans_grp_data[2]
 
     groups = [[] for _ in range(number_of_groups)]
 
@@ -68,9 +71,11 @@ async def upload_spreadsheet(
 
         groups[group].append(location_dict)
     
-    # bpn_osm_and_kmeans.generate_kmeans_grouping_graph(geocoded_data, number_of_groups, cluster_labels)
+    # Elbow method for kmeans
+    # elbow_method.elbow_method_graph(x)
 
-    # return bpn_osm_and_kmeans.Kmeans_addresses(number_of_groups, geocoded_data)
+    # Generating the kmeans graph
+    # bpn_osm_and_kmeans.generate_kmeans_grouping_graph(geocoded_data, number_of_groups, cluster_labels)
 
     return {
         "filename": file.filename,
