@@ -5,12 +5,6 @@ VENV_DIR := $(BACKEND_DIR)/.venv
 
 .PHONY: run frontend backend
 
-run:
-	@echo "Starting backend and frontend..."
-	@trap "echo '\nShutting down...'; kill 0" EXIT; \
-		$(MAKE) backend & \
-		$(MAKE) frontend
-
 backend:
 	cd $(BACKEND_DIR) && uvicorn app:app --reload --port 8000
 
