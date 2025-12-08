@@ -33,10 +33,11 @@ async def upload_spreadsheet(
     try:
         if file.filename.lower().endswith(".csv"):
             df = pd.read_csv(BytesIO(contents))
-            df = df.dropna(axis=1, how="all").loc[:, (df != "").any()]
         else:
             df = pd.read_excel(BytesIO(contents))
-            df = df.dropna(axis=1, how="all").loc[:, (df != "").any()]
+
+        df = df.dropna(axis=1, how="all").loc[:, (df != "").any()]
+        df = df.dropna(subset=["Address"])
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read spreadsheet: {e}")
@@ -59,8 +60,7 @@ async def upload_spreadsheet(
     print("geocoded_data: ", geocoded_data)
     
     kmeans_grp_data = bpn_osm_and_kmeans.get_groups(geocoded_data, number_of_groups)[0]
-    cluster_labels = kmeans_grp_data[0]
-    x = kmeans_grp_data[2]
+    cluster_labels = kmeans_grp_data
 
     groups = [[] for _ in range(number_of_groups)]
 
@@ -75,7 +75,7 @@ async def upload_spreadsheet(
     # elbow_method.elbow_method_graph(x)
 
     # Generating the kmeans graph
-    # bpn_osm_and_kmeans.generate_kmeans_grouping_graph(geocoded_data, number_of_groups, cluster_labels)
+    bpn_osm_and_kmeans.generate_kmeans_grouping_graph(geocoded_data, number_of_groups, cluster_labels)
 
     return {
         "filename": file.filename,
