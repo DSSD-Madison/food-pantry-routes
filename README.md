@@ -11,6 +11,5 @@ make backend
 ```
 Second terminal: 
 ```
-
 make frontend
 ```
