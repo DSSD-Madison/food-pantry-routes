@@ -7,5 +7,10 @@ make deps
 # Run
 ```
 source backend/.venv/bin/activate
-make run
+make backend
+```
+Second terminal: 
+```
+
+make frontend
 ```
