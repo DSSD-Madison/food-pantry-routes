@@ -10,6 +10,9 @@ import matplotlib
 import json
 import os
 import time
+import requests
+from scipy.spatial import distance_matrix
+import math
 
 CACHE_FILE = "geocode_cache.json"
 
@@ -94,6 +97,8 @@ def get_groups(data, n_clusters):
 
     cluster_labels, cluster_centers = balanced_kmeans(x, n_clusters)
 
+    # print("Cluster Labels: ", cluster_labels)
+
     return (cluster_labels, cluster_centers, x)
 
 # def get_groups(data, n_clusters):
@@ -140,6 +145,9 @@ def generate_kmeans_grouping_graph(geocode_address_data, n_clusters, cluster_lab
     cluster = int(cluster_labels[i])
     color = cluster_colors[cluster]
     colors.append(color)
+
+  # Calling distance_matrix temporarily
+  distance_matrix(geocode_address_data, n_clusters, cluster_labels)
 
   # plt.plot(latitude,longitude,'o')
   plt.scatter(latitude, longitude, c=colors)
@@ -197,3 +205,176 @@ def balanced_kmeans(x, n_clusters, random_state=42):
         new_centers[c] = pts.mean(axis=0)
 
     return cluster_labels, new_centers
+
+def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
+
+    #Creating a cluster dictionary
+    cluster_dict = {}
+
+    for i in range(len(geocode_address_data)):
+        coordinates = {}
+
+        coordinates["latitude"] = geocode_address_data[i].get("latitude")
+        coordinates["longitude"] = geocode_address_data[i].get("longitude")
+
+        cluster_number = int(cluster_labels[i])
+        if cluster_number not in cluster_dict:
+            cluster_dict[cluster_number] = []
+
+        cluster_dict[cluster_number].append(coordinates)
+    
+    # print("cluster_dict: ", cluster_dict)
+
+    distance_matrices = {}
+
+    #Creating a distance matrix for each group
+    for cluster in cluster_dict:
+        
+        # Calling the OSRM API for the distances between locations 
+
+        # One API call enough if we need to do the distance matrix for 100 or fewer locations
+        if (len(cluster_dict[cluster]) <= 100):
+
+            # Adding all the latitudes and longitudes to the string to make the url for the API call
+            addresses_string = ""
+            for i in cluster_dict[cluster]:
+                lon = i["longitude"]
+                lat = i["latitude"]
+                addresses_string += f"{lon},{lat};"
+            
+            #remove the last semicolor
+            addresses_string = addresses_string[:-1]
+
+            # By default the json response gives duration (time in seconds) instead of distance(m), so we have to specify
+            url = "http://router.project-osrm.org/table/v1/driving/" + addresses_string + "?annotations=distance"
+            osrm_response = requests.get(url)
+
+            # Check the HTTP status code
+            if osrm_response.status_code != 200:
+                raise Exception(f"OSRM API request failed with status code {osrm_response.status_code} for cluster {cluster}")
+
+            try:
+                data = osrm_response.json()
+            except ValueError:
+                raise Exception(f"OSRM API returned invalid JSON for cluster {cluster}")
+
+            # Check the OSRM response has a valid code
+            if data.get("code") != "Ok":
+                raise Exception(f"OSRM API returned an error: {data.get('code')} - {data.get('message', 'No message provided')}")
+
+            # Check the distances key actually exists
+            if "distances" not in data:
+                raise Exception(f"OSRM API response missing 'distances' key for cluster {cluster}")
+
+            distance_data = data["distances"]
+
+            # Check the matrix has the expected dimensions
+            if len(distance_data) == 0:
+                raise Exception(f"OSRM API returned an empty distance matrix for cluster {cluster}")
+
+            distance_matrices[cluster] = distance_data
+
+        # Split the distance matrix into parts if it is too big and rejoin it later
+        else:
+            cluster_size = len(cluster_dict[cluster])
+            print("Number of points in the cluster: ", cluster_size)
+
+
+            # Initializing the distance matrix for the cluster
+            cluster_distance_matrix = []
+            for i in range(cluster_size):
+                cluster_distance_matrix.append([])
+                for j in range(cluster_size):
+                    cluster_distance_matrix[i].append(0)
+
+            chunk_size = 100
+            # Deciding how many smaller distance matrices to split into
+            no_of_splits = math.ceil((cluster_size / chunk_size))
+
+            total_smaller_dist_matrices = no_of_splits * no_of_splits
+
+            # Looping through each smaller chunk
+            for i in range(no_of_splits):
+                for j in range(no_of_splits):
+                    # Math to get the correct indicies for the row and column
+                    current_split_no = i*no_of_splits + j
+
+                    row_range_lim = chunk_size if (cluster_size - i*chunk_size) > chunk_size else (cluster_size - i*chunk_size)
+                    start_row_index = 0 + i*chunk_size
+                    end_row_index = row_range_lim + i*chunk_size
+
+                    col_range_lim = chunk_size if (cluster_size - j*chunk_size) > chunk_size else (cluster_size - j*chunk_size)
+                    start_col_index = 0 + j*chunk_size
+                    end_col_index = col_range_lim + j*chunk_size
+                    
+                    # print(f"For split {current_split_no}, row_ranges: {start_row_index} - {end_row_index}, col_ranges: {start_col_index} - {end_col_index}")
+
+                    row_str_list = []
+                    for row_index in range(start_row_index,end_row_index):
+                        row_str_list.append(f"{cluster_dict[cluster][row_index]['longitude']},{cluster_dict[cluster][row_index]['latitude']}")
+
+                    col_str_list = []
+                    for col_index in range(start_col_index,end_col_index):
+                        col_str_list.append(f"{cluster_dict[cluster][col_index]['longitude']},{cluster_dict[cluster][col_index]['latitude']}")
+                    
+                    # We need the sources numbers and the destination numbers
+                    indexes_in_string_rows = end_row_index - start_row_index
+                    indexes_in_string_cols = end_col_index - start_col_index
+                    col_indicies_url = list(range(indexes_in_string_cols))
+                    for col_index in range(len(col_indicies_url)):
+                        col_indicies_url[col_index] = col_indicies_url[col_index] + indexes_in_string_rows
+
+                    # adding the sources and destinations to the url because osrm does only 100 locations at a time
+
+                    sources_str = ";".join(map(str, range(indexes_in_string_rows)))
+                    dest_str = ";".join(map(str, col_indicies_url))
+
+                    if i == j: 
+                        # Sources and destinations are the same, so just send coordinates once
+                        addresses_string = ";".join(row_str_list)
+                        url = "http://router.project-osrm.org/table/v1/driving/" + addresses_string + "?annotations=distance"
+                    else:
+                        # Creating the final list of latitudes and longitudes
+
+                        # Sources and destinations differ, so send both and specify which is which
+                        final_addresses_string = ";".join(row_str_list + col_str_list)
+                        url = "http://router.project-osrm.org/table/v1/driving/" + final_addresses_string + "?annotations=distance" + "&sources=" + sources_str + "&destinations=" + dest_str                    
+
+                    osrm_response = requests.get(url)
+
+                    # Check the HTTP status code
+                    if osrm_response.status_code != 200:
+                        raise Exception(f"OSRM API request failed with status code {osrm_response.status_code} for cluster {cluster}")
+
+                    try:
+                        data = osrm_response.json()
+                    except ValueError:
+                        raise Exception(f"OSRM API returned invalid JSON for cluster {cluster}")
+
+                    # Check the OSRM response has a valid code
+                    if data.get("code") != "Ok":
+                        raise Exception(f"OSRM API returned an error: {data.get('code')} - {data.get('message', 'No message provided')}")
+
+                    # Check the distances key actually exists
+                    if "distances" not in data:
+                        raise Exception(f"OSRM API response missing 'distances' key for cluster {cluster}")
+
+                    distance_data = data["distances"]
+
+                    # Check the matrix has the expected dimensions
+                    if len(distance_data) == 0:
+                        raise Exception(f"OSRM API returned an empty distance matrix for cluster {cluster}")
+
+                    # Looping through the returned data to put in the overall cluster distance matrix
+                    for distance_li_index in range(len(distance_data)):
+                        for distance_index in range(len(distance_data[distance_li_index])):
+                            final_row_index = i * chunk_size + distance_li_index
+                            final_col_index = j * chunk_size + distance_index
+
+                            cluster_distance_matrix[final_row_index][final_col_index] = distance_data[distance_li_index][distance_index]
+                    
+            # Putting the final assembled distance matrix into the cluster dictionary
+            distance_matrices[cluster] = cluster_distance_matrix
+
+
+    print("distance matrices: ", distance_matrices)
