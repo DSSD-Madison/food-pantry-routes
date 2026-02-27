@@ -10,7 +10,8 @@ import matplotlib
 import json
 import os
 import time
-
+from sklearn.cluster import DBSCAN
+from collections import defaultdict
 CACHE_FILE = "geocode_cache.json"
 
 
@@ -197,3 +198,34 @@ def balanced_kmeans(x, n_clusters, random_state=42):
         new_centers[c] = pts.mean(axis=0)
 
     return cluster_labels, new_centers
+
+def dbscan(x, minpts):
+    epsilon = 200/6371000
+
+    db = DBSCAN(eps=epsilon, min_samples=minpts, metric="haversine").fit(x)
+    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+    core_samples_mask[db.core_sample_indices_] = True
+    labels = db.labels_
+
+    clusters = defaultdict(list)
+
+    for point, label in zip(x, labels):
+        if label != -1:
+            clusters[label].append(point)
+
+    clusters = dict(clusters)
+
+    clusters_deg = {}
+
+    for k, points in clusters.items():
+        clusters_deg[int(k)] = [
+            [
+                np.degrees(p[0]),
+                np.degrees(p[1])
+            ]
+        for p in points
+        ]
+
+    return clusters_deg
+
+
