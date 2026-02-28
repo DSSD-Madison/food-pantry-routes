@@ -12,6 +12,7 @@ import os
 import time
 from sklearn.cluster import DBSCAN
 from collections import defaultdict
+from math import pi
 CACHE_FILE = "geocode_cache.json"
 
 
@@ -199,7 +200,13 @@ def balanced_kmeans(x, n_clusters, random_state=42):
 
     return cluster_labels, new_centers
 
-def dbscan(x, minpts):
+def dbscan(data, minpts):
+    x = []
+    radians = pi/180
+    for i in data:
+        x.append([i.get("latitude") * radians,i.get("longitude") * radians])
+    x= np.array(x)
+
     epsilon = 200/6371000
 
     db = DBSCAN(eps=epsilon, min_samples=minpts, metric="haversine").fit(x)
