@@ -20,7 +20,7 @@ venv:
 deps:
 	@echo "Installing backend Python dependencies..."
 	cd $(BACKEND_DIR) && \
-		. .venv/bin/activate && \
+		.venv\Scripts\activate.bat && \
 		pip install -r requirements.txt
 
 	@echo "Installing frontend Node modules..."
