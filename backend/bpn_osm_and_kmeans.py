@@ -13,6 +13,8 @@ import time
 import requests
 from scipy.spatial import distance_matrix
 import math
+from ortools.constraint_solver import routing_enums_pb2
+from ortools.constraint_solver import pywrapcp
 
 CACHE_FILE = "geocode_cache.json"
 
@@ -378,3 +380,46 @@ def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
 
     print("distance matrices: ", distance_matrices)
+
+def get_best_route():
+
+    # creating the dictionary to pass to OR-tools
+
+    data = {}
+    data["distance_matrix"] = distance_matrix[0]
+    data["num_vehicles"] = 1 # change num_vehicles to how many ever needed
+    data["depot"] = 0 # index for the starting location
+
+    # creating a routing index manager
+    manager = pywrapcp.RoutingIndexManager(
+        len(data["distance_matrix"]), data["num_vehicles"], data["depot"]
+    )
+
+    # create routing model
+    routing = pywrapcp.RoutingModel(manager)
+
+    # create and register a transit callback
+    def distance_callback(from_index, to_index):
+
+        # returning the distance between two nodes
+        
+        # converting from routing variable index to distance matrix NodeIndex
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+
+        return data["distance_matrix"][from_node][to_node]
+    
+    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+
+    # defining cost of each arc
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    # Add Distance Constraint 
+    dimension_name = "Distance"
+    routing.AddDimension(
+        transit_callback_index,
+        0, # no slack
+        3000, # vehicle maximum travel distance
+        True, # start cumul to zero
+        dimension_name
+    )
