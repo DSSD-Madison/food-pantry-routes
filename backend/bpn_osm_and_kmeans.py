@@ -149,7 +149,7 @@ def generate_kmeans_grouping_graph(geocode_address_data, n_clusters, cluster_lab
     colors.append(color)
 
   # Calling distance_matrix temporarily
-  distance_matrix(geocode_address_data, n_clusters, cluster_labels)
+#   distance_matrix(geocode_address_data, n_clusters, cluster_labels)
 
   # plt.plot(latitude,longitude,'o')
   plt.scatter(latitude, longitude, c=colors)
