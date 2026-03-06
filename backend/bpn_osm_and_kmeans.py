@@ -10,18 +10,15 @@ import matplotlib
 import json
 import os
 import time
-<<<<<<< HEAD
 from sklearn.cluster import DBSCAN
 from collections import defaultdict
 from math import pi
-=======
 import requests
 from scipy.spatial import distance_matrix
 import math
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
->>>>>>> main
 CACHE_FILE = "geocode_cache.json"
 
 
@@ -214,7 +211,6 @@ def balanced_kmeans(x, n_clusters, random_state=42):
 
     return cluster_labels, new_centers
 
-<<<<<<< HEAD
 def dbscan(data, minpts):
     x = []
     radians = pi/180
@@ -251,7 +247,6 @@ def dbscan(data, minpts):
     return clusters_deg
 
 
-=======
 def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
     #Creating a cluster dictionary
@@ -468,4 +463,3 @@ def get_best_route():
         True, # start cumul to zero
         dimension_name
     )
->>>>>>> main
