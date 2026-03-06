@@ -10,12 +10,18 @@ import matplotlib
 import json
 import os
 import time
+<<<<<<< HEAD
+from sklearn.cluster import DBSCAN
+from collections import defaultdict
+from math import pi
+=======
 import requests
 from scipy.spatial import distance_matrix
 import math
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
+>>>>>>> main
 CACHE_FILE = "geocode_cache.json"
 
 
@@ -208,6 +214,44 @@ def balanced_kmeans(x, n_clusters, random_state=42):
 
     return cluster_labels, new_centers
 
+<<<<<<< HEAD
+def dbscan(data, minpts):
+    x = []
+    radians = pi/180
+    for i in data:
+        x.append([i.get("latitude") * radians,i.get("longitude") * radians])
+    x= np.array(x)
+
+    epsilon = 200/6371000
+
+    db = DBSCAN(eps=epsilon, min_samples=minpts, metric="haversine").fit(x)
+    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+    core_samples_mask[db.core_sample_indices_] = True
+    labels = db.labels_
+
+    clusters = defaultdict(list)
+
+    for point, label in zip(x, labels):
+        if label != -1:
+            clusters[label].append(point)
+
+    clusters = dict(clusters)
+
+    clusters_deg = {}
+
+    for k, points in clusters.items():
+        clusters_deg[int(k)] = [
+            [
+                np.degrees(p[0]),
+                np.degrees(p[1])
+            ]
+        for p in points
+        ]
+
+    return clusters_deg
+
+
+=======
 def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
     #Creating a cluster dictionary
@@ -424,3 +468,4 @@ def get_best_route():
         True, # start cumul to zero
         dimension_name
     )
+>>>>>>> main
