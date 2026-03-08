@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 import DragDropDemo from "./DragDropDemo";
 
@@ -6,6 +6,15 @@ type TableResponse = {
   filename: string;
   columns: string[];
   groups: Record<string, any>[][];
+};
+
+type SavedGrouping = {
+  id: string;
+  filename: string;
+  number_of_groups: number;
+  columns: string[];
+  groups: Record<string, any>[][];
+  created_at: string;
 };
 
 const API_BASE_URL =
@@ -17,6 +26,27 @@ function App() {
   const [table, setTable] = useState<TableResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedGroupings, setSavedGroupings] = useState<SavedGrouping[]>([]);
+  const [showSaved, setShowSaved] = useState(false);
+
+  // ------------------------------
+  // Fetch saved groupings on mount
+  // ------------------------------
+  useEffect(() => {
+    fetchSavedGroupings();
+  }, []);
+
+  const fetchSavedGroupings = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/groupings`);
+      if (res.ok) {
+        const data = await res.json();
+        setSavedGroupings(data.groupings || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch saved groupings:", err);
+    }
+  };
 
   // ------------------------------
   // Handle file selection
@@ -69,6 +99,40 @@ function App() {
       setError(err.message || "Something went wrong while uploading.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ------------------------------
+  // Load saved grouping
+  // ------------------------------
+  const handleLoadGrouping = (grouping: SavedGrouping) => {
+    setTable({
+      filename: grouping.filename,
+      columns: grouping.columns,
+      groups: grouping.groups,
+    });
+    setShowSaved(false);
+  };
+
+  // ------------------------------
+  // Delete saved grouping
+  // ------------------------------
+  const handleDeleteGrouping = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this grouping?")) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/groupings/${id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setSavedGroupings((prev) => prev.filter((g) => g.id !== id));
+        alert("Grouping deleted successfully");
+      } else {
+        throw new Error("Failed to delete");
+      }
+    } catch (err: any) {
+      alert(`Error deleting grouping: ${err.message}`);
     }
   };
 
@@ -127,6 +191,59 @@ function App() {
         )}
 
         {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
+      </div>
+
+      {/* Saved Groupings Section */}
+      <div className="card" style={{ marginTop: "2rem" }}>
+        <h2>Previously Saved Groupings</h2>
+        <button
+          onClick={() => setShowSaved(!showSaved)}
+          style={{ marginBottom: "1rem" }}
+        >
+          {showSaved ? "Hide" : "Show"} Saved Groupings ({savedGroupings.length})
+        </button>
+
+        {showSaved && (
+          <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+            {savedGroupings.length === 0 ? (
+              <p>No saved groupings yet.</p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0 }}>
+                {savedGroupings.map((grouping) => (
+                  <li
+                    key={grouping.id}
+                    style={{
+                      border: "1px solid #ccc",
+                      padding: "10px",
+                      marginBottom: "10px",
+                      borderRadius: "5px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <strong>{grouping.filename}</strong>
+                        <div style={{ fontSize: "0.9em", color: "#666" }}>
+                          {grouping.number_of_groups} groups • Created: {new Date(grouping.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <button onClick={() => handleLoadGrouping(grouping)}>
+                          Load
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGrouping(grouping.id)}
+                          style={{ background: "#dc3545" }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       <p className="read-the-docs">
