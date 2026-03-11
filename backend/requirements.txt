@@ -1,3 +1,4 @@
+ortools
 geopy
 pandas
 scikit-learn
@@ -5,6 +6,8 @@ matplotlib
 openpyxl
 fastapi
 numpy
+supabase
+python-dotenv
 annotated-doc==0.0.3
 annotated-types==0.7.0
 anyio==4.11.0
