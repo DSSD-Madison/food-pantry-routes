@@ -153,6 +153,9 @@ def generate_kmeans_grouping_graph(geocode_address_data, n_clusters, cluster_lab
 
   # Calling distance_matrix temporarily
 #   distance_matrix(geocode_address_data, n_clusters, cluster_labels)
+  # getting the best routes
+  get_best_route(geocode_address_data, n_clusters, cluster_labels)
+
 
   # plt.plot(latitude,longitude,'o')
   plt.scatter(latitude, longitude, c=colors)
@@ -417,49 +420,167 @@ def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
             # Putting the final assembled distance matrix into the cluster dictionary
             distance_matrices[cluster] = cluster_distance_matrix
 
-
     print("distance matrices: ", distance_matrices)
+    return(distance_matrices, cluster_dict)
 
-# incomplete code for the OR-tools
-def get_best_route():
-
-    # creating the dictionary to pass to OR-tools
-
-    data = {}
-    data["distance_matrix"] = distance_matrix[0]
-    data["num_vehicles"] = 1 # change num_vehicles to how many ever needed
-    data["depot"] = 0 # index for the starting location
-
-    # creating a routing index manager
-    manager = pywrapcp.RoutingIndexManager(
-        len(data["distance_matrix"]), data["num_vehicles"], data["depot"]
-    )
-
-    # create routing model
-    routing = pywrapcp.RoutingModel(manager)
-
-    # create and register a transit callback
-    def distance_callback(from_index, to_index):
-
-        # returning the distance between two nodes
-        
-        # converting from routing variable index to distance matrix NodeIndex
-        from_node = manager.IndexToNode(from_index)
-        to_node = manager.IndexToNode(to_index)
-
-        return data["distance_matrix"][from_node][to_node]
+def print_solution(data, manager, routing, solution):
+    """Prints solution on console."""
+    # print(f"Objective: {solution.ObjectiveValue()}")
     
-    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+    solution_data = {}
 
-    # defining cost of each arc
-    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+    max_route_distance = 0
+    for vehicle_id in range(data["num_vehicles"]):
+        if not routing.IsVehicleUsed(solution, vehicle_id):
+            continue
+        index = routing.Start(vehicle_id)
+        plan_output = f"Route for vehicle {vehicle_id}:\n"
+        route_distance = 0
+        while not routing.IsEnd(index):
+            plan_output += f" {manager.IndexToNode(index)} -> "
+            previous_index = index
+            index = solution.Value(routing.NextVar(index))
+            route_distance += routing.GetArcCostForVehicle(
+                previous_index, index, vehicle_id
+            )
+        plan_output += f"{manager.IndexToNode(index)}\n"
+        plan_output += f"Distance of the route: {route_distance}m\n"
+        
+        vehicle_data = {}
+        vehicle_data["route_distance"] = route_distance
+        vehicle_data["route_plan"] = plan_output
 
-    # Add Distance Constraint 
-    dimension_name = "Distance"
-    routing.AddDimension(
-        transit_callback_index,
-        0, # no slack
-        3000, # vehicle maximum travel distance
-        True, # start cumul to zero
-        dimension_name
-    )
+        solution_data[vehicle_id] = vehicle_data
+
+        max_route_distance = max(route_distance, max_route_distance)
+
+    return solution.ObjectiveValue(), solution_data, max_route_distance
+
+def convert_indicies_to_lat_and_long(cluster_routes, cluster_dict):
+    
+    path_data = {}
+    
+    # get latitude and longitude from geocode_address_data
+
+    # looping through every route plan
+    for cluster in cluster_routes:
+
+        cluster_paths = {}
+
+        cluster_data = cluster_routes[cluster]
+
+        routes_data = cluster_data["routes_data"]
+        
+        # handling situation appropriately if no solution for that cluster
+        if routes_data != "No solution found!":
+            for route_id in routes_data:
+                route_path = []
+
+                route_plan_text = routes_data[route_id]["route_plan"]
+                # removing the initial text
+                route_plan_text = route_plan_text.split("\n")[1].strip()
+
+                # For each route, now get the indicies of the location that corresponds to the index of the lat and long in the list of locations in the particular cluster in cluster_dict
+                for location_index_str in route_plan_text.split("->"):
+                    location_index = int(location_index_str.strip())
+
+                    # adding the lat and long coordinates in order of their path in that cluster to cluster_path
+                    route_path.append(cluster_dict[cluster][location_index])
+                
+                cluster_paths[route_id] = route_path
+            
+            path_data[cluster] = cluster_paths
+        else:
+            path_data[cluster] = "No Solution"
+    
+    return path_data
+
+
+def get_best_route(geocode_address_data, n_clusters, cluster_labels):
+
+    cluster_distance_matrix, cluster_dict = distance_matrix(geocode_address_data, n_clusters, cluster_labels)
+    cluster_routes = {}
+
+    for cluster in cluster_distance_matrix:
+
+        cluster_data = {}
+
+        # creating the dictionary to pass to OR-tools
+
+        data = {}
+        data["distance_matrix"] = cluster_distance_matrix[cluster]
+        data["num_vehicles"] = 1 # change num_vehicles to how many ever needed
+        data["depot"] = 0 # index for the starting location
+
+        # creating a routing index manager
+        manager = pywrapcp.RoutingIndexManager(
+            len(data["distance_matrix"]), data["num_vehicles"], data["depot"]
+        )
+
+        # create routing model
+        routing = pywrapcp.RoutingModel(manager)
+
+        # create and register a transit callback
+        def distance_callback(from_index, to_index):
+
+            # returning the distance between two nodes
+            
+            # converting from routing variable index to distance matrix NodeIndex
+            from_node = manager.IndexToNode(from_index)
+            to_node = manager.IndexToNode(to_index)
+
+            return int(round(data["distance_matrix"][from_node][to_node]))
+        
+        transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+
+        # defining cost of each arc
+        routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+        print("Works till defining the cost of each arc")
+
+        # Add Distance Constraint 
+        dimension_name = "Distance"
+        routing.AddDimension(
+            transit_callback_index,
+            0, # no slack
+            999999999, # vehicle maximum travel distance (setting it high temporarily)
+            True, # start cumul to zero
+            dimension_name
+        )
+        distance_dimension = routing.GetDimensionOrDie(dimension_name)
+        distance_dimension.SetGlobalSpanCostCoefficient(100)
+
+        # Setting first solution heuristic
+        search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+        search_parameters.first_solution_strategy = (
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+        )
+        search_parameters.time_limit.seconds = 30
+
+        # Solve the problem
+        print("Starting solver...")
+        solution = routing.SolveWithParameters(search_parameters)
+        print("Solver finished!")
+
+        cluster_data["distance_matrix"] = data["distance_matrix"]
+
+        # saving the solution if it exists in the dictionary
+        if solution:                        
+            objective, routes_data, max_route_distance = print_solution(data, manager, routing, solution)
+            cluster_data["routes_data"] = routes_data
+            cluster_data["objective"] = objective
+            cluster_data["max_route_distance"] = max_route_distance
+        else:
+            cluster_data["routes_data"] = "No solution found!"
+            cluster_data["objective"] = "N/A"
+            cluster_data["max_route_distance"] = "N/A"
+        
+        cluster_routes[cluster] = cluster_data
+    
+    # print("Cluster Routes: ", cluster_routes)
+
+    cluster_paths = convert_indicies_to_lat_and_long(cluster_routes, cluster_dict)
+
+    print("cluster_paths: ", cluster_paths)
+
+    return cluster_paths
