@@ -450,6 +450,7 @@ def print_solution(data, manager, routing, solution):
         vehicle_data["route_distance"] = route_distance
         vehicle_data["route_plan"] = plan_output
 
+<<<<<<< HEAD
         solution_data[vehicle_id] = vehicle_data
 
         max_route_distance = max(route_distance, max_route_distance)
@@ -584,3 +585,14 @@ def get_best_route(geocode_address_data, n_clusters, cluster_labels):
     print("cluster_paths: ", cluster_paths)
 
     return cluster_paths
+=======
+    # Add Distance Constraint 
+    dimension_name = "Distance"
+    routing.AddDimension(
+        transit_callback_index,
+        0, # no slack
+        3000, # vehicle maximum travel distance
+        True, # start cumul to zero
+        dimension_name
+    )
+>>>>>>> ead9c22 (5)
