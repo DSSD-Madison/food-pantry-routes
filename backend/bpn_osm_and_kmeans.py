@@ -450,7 +450,6 @@ def print_solution(data, manager, routing, solution):
         vehicle_data["route_distance"] = route_distance
         vehicle_data["route_plan"] = plan_output
 
-<<<<<<< HEAD
         solution_data[vehicle_id] = vehicle_data
 
         max_route_distance = max(route_distance, max_route_distance)
@@ -495,6 +494,99 @@ def convert_indicies_to_lat_and_long(cluster_routes, cluster_dict):
             path_data[cluster] = "No Solution"
     
     return path_data
+
+def get_best_route_all(geocode_address_data, n_clusters, cluster_labels):
+
+    new_labels = np.zeros(len(cluster_labels), dtype=int)
+
+    cluster_distance_matrix, cluster_dict = distance_matrix(geocode_address_data, n_clusters, new_labels)
+
+    cluster_routes = {}
+
+    for cluster in cluster_distance_matrix:
+
+        cluster_data = {}
+
+        # creating the dictionary to pass to OR-tools
+
+        data = {}
+        data["distance_matrix"] = cluster_distance_matrix[cluster]
+        data["num_vehicles"] = 4 # change num_vehicles to how many ever needed
+        data["depot"] = 0 # index for the starting location
+
+        # creating a routing index manager
+        manager = pywrapcp.RoutingIndexManager(
+            len(data["distance_matrix"]), data["num_vehicles"], data["depot"]
+        )
+
+        # create routing model
+        routing = pywrapcp.RoutingModel(manager)
+
+        # create and register a transit callback
+        def distance_callback(from_index, to_index):
+
+            # returning the distance between two nodes
+            
+            # converting from routing variable index to distance matrix NodeIndex
+            from_node = manager.IndexToNode(from_index)
+            to_node = manager.IndexToNode(to_index)
+
+            return int(round(data["distance_matrix"][from_node][to_node]))
+        
+        transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+
+        # defining cost of each arc
+        routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+        print("Works till defining the cost of each arc")
+
+        # Add Distance Constraint 
+        dimension_name = "Distance"
+        routing.AddDimension(
+            transit_callback_index,
+            0, # no slack
+            999999999, # vehicle maximum travel distance (setting it high temporarily)
+            True, # start cumul to zero
+            dimension_name
+        )
+        distance_dimension = routing.GetDimensionOrDie(dimension_name)
+        distance_dimension.SetGlobalSpanCostCoefficient(100)
+
+        # Setting first solution heuristic
+        search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+        search_parameters.first_solution_strategy = (
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+        )
+        search_parameters.time_limit.seconds = 30
+
+        # Solve the problem
+        print("Starting solver...")
+        solution = routing.SolveWithParameters(search_parameters)
+        print("Solver finished!")
+
+        cluster_data["distance_matrix"] = data["distance_matrix"]
+
+        # saving the solution if it exists in the dictionary
+        if solution:                        
+            objective, routes_data, max_route_distance = print_solution(data, manager, routing, solution)
+            cluster_data["routes_data"] = routes_data
+            cluster_data["objective"] = objective
+            cluster_data["max_route_distance"] = max_route_distance
+        else:
+            cluster_data["routes_data"] = "No solution found!"
+            cluster_data["objective"] = "N/A"
+            cluster_data["max_route_distance"] = "N/A"
+        
+        cluster_routes[cluster] = cluster_data
+    
+    # print("Cluster Routes: ", cluster_routes)
+
+    cluster_paths = convert_indicies_to_lat_and_long(cluster_routes, cluster_dict)
+
+    print("cluster_paths: ", cluster_paths)
+
+    return cluster_paths
+
 
 
 def get_best_route(geocode_address_data, n_clusters, cluster_labels):
@@ -585,7 +677,6 @@ def get_best_route(geocode_address_data, n_clusters, cluster_labels):
     print("cluster_paths: ", cluster_paths)
 
     return cluster_paths
-=======
     # Add Distance Constraint 
     dimension_name = "Distance"
     routing.AddDimension(
@@ -595,4 +686,31 @@ def get_best_route(geocode_address_data, n_clusters, cluster_labels):
         True, # start cumul to zero
         dimension_name
     )
->>>>>>> ead9c22 (5)
+
+"""
+if __name__ == "__main__":
+    test_addresses = [
+        "Union South, Madison, WI",
+        "State Street, Madison, WI",
+        "Camp Randall Stadium, Madison, WI",
+        "Monona Terrace, Madison, WI",
+        "Henry Vilas Zoo, Madison, WI",
+        "Memorial Union, Madison, WI",
+        "Willy Street, Madison, WI",
+    ]
+
+    # Step 1: geocode
+    geocoded = geocode_addresses(test_addresses)
+    print(f"Geocoded {len(geocoded)} addresses")
+
+    # Step 2: run the global route solver directly — no clustering needed
+    dummy_labels = np.zeros(len(geocoded), dtype=int)
+    result = get_best_route_all(geocoded, 4, dummy_labels)
+
+    print("\n--- FINAL PATHS ---")
+    for cluster_id, vehicles in result.items():
+        for vehicle_id, path in vehicles.items():
+            print(f"\nVehicle {vehicle_id}:")
+            for stop in path:
+                print(f"  {stop['latitude']}, {stop['longitude']}")
+"""
