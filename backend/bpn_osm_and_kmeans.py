@@ -20,7 +20,7 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
 CACHE_FILE = "geocode_cache.json"
-
+GROUPING_METHOD = "Na"  # or "dbscan"
 
 def load_cache():
     """Load cache from file or return empty dict."""
@@ -240,10 +240,10 @@ def dbscan(data, minpts):
 
     for k, points in clusters.items():
         clusters_deg[int(k)] = [
-            [
-                np.degrees(p[0]),
-                np.degrees(p[1])
-            ]
+            {
+                "latitude": np.degrees(p[0]),
+                "longitude": np.degrees(p[1])
+            }
         for p in points
         ]
 
@@ -590,6 +590,9 @@ def get_best_route_all(geocode_address_data, n_clusters, cluster_labels):
 
 
 def get_best_route(geocode_address_data, n_clusters, cluster_labels):
+
+    if GROUPING_METHOD == "Na":
+        cluster_labels = np.zeros(len(cluster_labels), dtype=int)
 
     cluster_distance_matrix, cluster_dict = distance_matrix(geocode_address_data, n_clusters, cluster_labels)
     cluster_routes = {}
