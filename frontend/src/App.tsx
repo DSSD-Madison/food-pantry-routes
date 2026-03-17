@@ -93,7 +93,6 @@ function App() {
 
       const data = (await res.json()) as TableResponse;
 
-      // 🔥 Switch UI to DragDropDemo after upload
       setTable(data);
     } catch (err: any) {
       setError(err.message || "Something went wrong while uploading.");
@@ -184,6 +183,8 @@ function App() {
           {loading ? "Uploading…" : "Upload & Process"}
         </button>
 
+        {/* button Saved Groups --> take to new page with groups from database */}
+
         {file && (
           <p style={{ marginTop: "0.5rem" }}>
             Selected file: <strong>{file.name}</strong>
@@ -192,6 +193,12 @@ function App() {
 
         {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
       </div>
+
+      {/* Button to transition to nested map page */}
+      <a href="/map_index.html">
+        <button style={{ marginTop: "1rem" }}>View Map</button>
+      </a>
+
 
       {/* Saved Groupings Section */}
       <div className="card" style={{ marginTop: "2rem" }}>

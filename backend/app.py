@@ -40,7 +40,10 @@ async def upload_spreadsheet(
     number_of_groups: int = Form(..., gt=0),
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
-
+    
+    if file.filename == None: # Ensure a file was actually uploaded even though FastAPI should handle this case
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    
     if not file.filename.lower().endswith((".csv", ".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
