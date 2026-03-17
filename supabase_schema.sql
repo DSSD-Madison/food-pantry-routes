@@ -7,8 +7,13 @@ CREATE TABLE groupings (
   number_of_groups INTEGER NOT NULL,
   columns TEXT[] NOT NULL,
   groups JSONB NOT NULL,
+  best_routes JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- If the table already exists in Supabase, run this migration instead:
+ALTER TABLE groupings
+ADD COLUMN IF NOT EXISTS best_routes JSONB;
 
 -- Create index for faster queries
 CREATE INDEX idx_groupings_created_at ON groupings(created_at DESC);

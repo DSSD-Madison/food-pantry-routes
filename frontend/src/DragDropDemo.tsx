@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import "./DragDropDemo.css";
+import GoogleRoutesMap from "./GoogleRoutesMap";
 
 // -----------------------------
 // Types
@@ -25,7 +26,7 @@ export type RouteItem = {
   address: string;
   contact: string;
   priority: number;
-  raw: Record<string, any>;
+  raw: Record<string, unknown>;
 };
 
 export type CardData = {
@@ -34,11 +35,29 @@ export type CardData = {
   items: RouteItem[];
 };
 
+export type BackendBestRoutes = Record<
+  string,
+  Record<string, Array<Record<string, unknown>>> | "No Solution"
+>;
+
 type Props = {
   filename: string;
   columns: string[];
-  groups: Record<string, any>[][];
+  groups: Record<string, unknown>[][];
+  bestRoutes: BackendBestRoutes | null;
 };
+
+function getStringValue(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return fallback;
+}
 
 // -----------------------------
 // Sortable Item
@@ -106,7 +125,12 @@ function Card({ card }: { card: CardData }) {
 // -----------------------------
 // Main Component
 // -----------------------------
-export default function DragDropDemo({ filename, columns, groups }: Props) {
+export default function DragDropDemo({
+  filename,
+  columns,
+  groups,
+  bestRoutes,
+}: Props) {
   // ------------------------------------
   // Convert backend groups → RouteItem[]
   // ------------------------------------
@@ -116,9 +140,12 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
       title: `Group ${index + 1}`,
       items: group.map((row, rowIndex) => ({
         id: `g${index}-row${rowIndex}`,
-        name: row["name"] || row["Name"] || row[columns[0]] || "Unknown",
-        address: row["location"] || row["Location"] || "",
-        contact: row["contact"] || row["Contact"] || "",
+        name: getStringValue(
+          row["name"] ?? row["Name"] ?? row[columns[0]],
+          "Unknown"
+        ),
+        address: getStringValue(row["location"] ?? row["Location"]),
+        contact: getStringValue(row["contact"] ?? row["Contact"]),
         priority: Number(row["priority"] || row["Priority"] || rowIndex + 1),
         raw: row, // keep original row for exporting
       })),
@@ -240,23 +267,8 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
         {showMap ? "Hide Map" : "View Map"}
       </button>
       {showMap && (
-        <div
-          style={{
-            width: "100%",
-            height: "500px",
-            overflow: "hidden",
-            marginBottom: "1rem",
-          }}
-        >
-          <iframe
-            title="map"
-            width="100%"
-            height="100%"
-            style={{ border: 0, display: "block" }}
-            loading="lazy"
-            allowFullScreen
-            src="https://www.google.com/maps?q=Madison,WI&output=embed"
-          />
+        <div className="map-panel">
+          <GoogleRoutesMap routes={cards} bestRoutes={bestRoutes} />
         </div>
       )}
 
