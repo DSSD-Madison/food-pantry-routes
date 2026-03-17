@@ -13,6 +13,13 @@
   gap: 12px;
 }
 
+.button-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
 .demo-header h1 {
   margin: 0;
   font-size: 1.5rem;
