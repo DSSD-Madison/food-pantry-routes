@@ -260,14 +260,9 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
     <div className="demo-container">
       <div className="demo-header">
         <h1>Route Planning – Drag & Drop</h1>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button className="export-button" onClick={handleSaveGrouping}>
-            Save to Database
-          </button>
-          <button className="export-button" onClick={handleExportJSON}>
-            Export JSON
-          </button>
-        </div>
+        <button className="export-button" onClick={handleExportJSON}>
+          Export JSON
+        </button>
       </div>
 
       <DndContext

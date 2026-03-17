@@ -96,6 +96,17 @@ async def upload_spreadsheet(
     # Generating the kmeans graph
     bpn_osm_and_kmeans.generate_kmeans_grouping_graph(geocoded_data, number_of_groups, cluster_labels)
 
+    # Auto-save grouping to database
+    try:
+        supabase.table("groupings").insert({
+            "filename": file.filename,
+            "number_of_groups": number_of_groups,
+            "columns": list(df.columns),
+            "groups": groups
+        }).execute()
+    except Exception as e:
+        print(f"Warning: Failed to auto-save grouping to database: {str(e)}")
+
     return {
         "filename": file.filename,
         "columns": list(df.columns),
