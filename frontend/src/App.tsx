@@ -194,12 +194,6 @@ function App() {
         {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
       </div>
 
-      {/* Button to transition to nested map page */}
-      <a href="/map_index.html">
-        <button style={{ marginTop: "1rem" }}>View Map</button>
-      </a>
-
-
       {/* Saved Groupings Section */}
       <div className="card" style={{ marginTop: "2rem" }}>
         <h2>Previously Saved Groupings</h2>

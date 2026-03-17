@@ -295,6 +295,10 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
           )}
         </DragOverlay>
       </DndContext>
+      {/* Button to transition to nested map page */}
+      <a href="/map_index.html">
+        <button style={{ marginTop: "1rem" }}>View Map</button>
+      </a>
     </div>
   );
 }
