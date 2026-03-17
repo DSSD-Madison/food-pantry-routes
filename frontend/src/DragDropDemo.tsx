@@ -218,56 +218,15 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
   };
 
   // ------------------------------------
-  // Save to Database
-  // ------------------------------------
-  const handleSaveGrouping = async () => {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-    
-    try {
-      const saveData = {
-        filename: filename,
-        number_of_groups: cards.length,
-        columns: columns,
-        groups: cards.map(card => 
-          card.items.map(item => item.raw)
-        )
-      };
-
-      const res = await fetch(`${API_BASE_URL}/save-grouping`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(saveData),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to save grouping");
-      }
-
-      const data = await res.json();
-      alert(`Grouping saved successfully! ID: ${data.id}`);
-    } catch (error: any) {
-      alert(`Error saving grouping: ${error.message}`);
-      console.error("Save error:", error);
-    }
-  };
-
-  // ------------------------------------
   // UI
   // ------------------------------------
   return (
     <div className="demo-container">
       <div className="demo-header">
         <h1>Route Planning – Drag & Drop</h1>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button className="export-button" onClick={handleSaveGrouping}>
-            Save to Database
-          </button>
-          <button className="export-button" onClick={handleExportJSON}>
-            Export JSON
-          </button>
-        </div>
+        <button className="export-button" onClick={handleExportJSON}>
+          Export JSON
+        </button>
       </div>
 
       <DndContext
