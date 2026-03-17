@@ -20,7 +20,7 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
 CACHE_FILE = "geocode_cache.json"
-
+GEOLOCATOR_TIMEOUT = 10
 
 def load_cache():
     """Load cache from file or return empty dict."""
@@ -41,10 +41,11 @@ def geocode_addresses(address_list):
     Geocode a list of addresses with caching.
     Success entries keep the same format; failures are also cached.
     """
-    geolocator = Nominatim(user_agent="BNNP_Flags", timeout=10)
+    geolocator = Nominatim(user_agent="BNNP_Flags", timeout=GEOLOCATOR_TIMEOUT) # type: ignore
 
     cache = load_cache()
     geocoded_locations = []
+    address = None
 
     try:
         for address in address_list:

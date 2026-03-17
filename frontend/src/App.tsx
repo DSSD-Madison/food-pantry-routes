@@ -93,7 +93,6 @@ function App() {
 
       const data = (await res.json()) as TableResponse;
 
-      // 🔥 Switch UI to DragDropDemo after upload
       setTable(data);
     } catch (err: any) {
       setError(err.message || "Something went wrong while uploading.");
@@ -183,6 +182,8 @@ function App() {
         >
           {loading ? "Uploading…" : "Upload & Process"}
         </button>
+
+        {/* button Saved Groups --> take to new page with groups from database */}
 
         {file && (
           <p style={{ marginTop: "0.5rem" }}>

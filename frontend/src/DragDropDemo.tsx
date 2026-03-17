@@ -10,7 +10,6 @@ import {
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   SortableContext,
-  arrayMove,
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
@@ -218,8 +217,45 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
   };
 
   // ------------------------------------
+  // Save to Database
+  // ------------------------------------
+  const handleSaveGrouping = async () => {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+    try {
+      const saveData = {
+        filename: filename,
+        number_of_groups: cards.length,
+        columns: columns,
+        groups: cards.map(card =>
+          card.items.map(item => item.raw)
+        )
+      };
+
+      const res = await fetch(`${API_BASE_URL}/save-grouping`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(saveData),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to save grouping");
+      }
+
+      const data = await res.json();
+      alert(`Grouping saved successfully! ID: ${data.id}`);
+    } catch (error: any) {
+      alert(`Error saving grouping: ${error.message}`);
+      console.error("Save error:", error);
+    }
+  };
+
+  // ------------------------------------
   // UI
   // ------------------------------------
+  const [showMap, setShowMap] = useState<boolean>(false);
   return (
     <div className="demo-container">
       <div className="demo-header">
@@ -254,6 +290,34 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
           )}
         </DragOverlay>
       </DndContext>
+      {/* Button to transition to nested map page */}
+      <button
+        style={{ marginTop: "1rem" }}
+        onClick={() => setShowMap((prev) => !prev)}
+      >
+        {showMap ? "Hide Map" : "View Map"}
+      </button>
+
+      {showMap && (
+        <div
+          style={{
+            width: "100%",
+            height: "500px",
+            overflow: "hidden",
+            marginTop: "1rem",
+          }}
+        >
+          <iframe
+            title="map"
+            width="100%"
+            height="100%"
+            style={{ border: 0, display: "block" }}
+            loading="lazy"
+            allowFullScreen
+            src="https://www.google.com/maps?q=Madison,WI&output=embed"
+          />
+        </div>
+      )}
     </div>
   );
 }
