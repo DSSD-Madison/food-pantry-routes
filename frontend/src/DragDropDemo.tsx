@@ -10,7 +10,6 @@ import {
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   SortableContext,
-  arrayMove,
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
@@ -39,6 +38,7 @@ type Props = {
   filename: string;
   columns: string[];
   groups: Record<string, any>[][];
+  onBack: () => void;
 };
 
 // -----------------------------
@@ -107,7 +107,7 @@ function Card({ card }: { card: CardData }) {
 // -----------------------------
 // Main Component
 // -----------------------------
-export default function DragDropDemo({ filename, columns, groups }: Props) {
+export default function DragDropDemo({ filename, columns, groups, onBack }: Props) {
   // ------------------------------------
   // Convert backend groups → RouteItem[]
   // ------------------------------------
@@ -128,6 +128,10 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
 
   const [cards, setCards] = useState<CardData[]>(initialCards);
   const [activeItem, setActiveItem] = useState<RouteItem | null>(null);
+  const [saveName, setSaveName] = useState<string>(filename);
+
+  const API_BASE_URL =
+    import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -218,15 +222,69 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
   };
 
   // ------------------------------------
+  // Save to Database
+  // ------------------------------------
+  const handleSaveGrouping = async () => {
+    const trimmedName = saveName.trim();
+
+    if (!trimmedName) {
+      alert("Please enter a name before saving.");
+      return;
+    }
+
+    try {
+      const saveData = {
+        filename: trimmedName,
+        number_of_groups: cards.length,
+        columns,
+        groups: cards.map((card) => card.items.map((item) => item.raw)),
+      };
+
+      const res = await fetch(`${API_BASE_URL}/save-grouping`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(saveData),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || "Failed to save grouping");
+      }
+
+      alert("Grouping saved successfully.");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      alert(`Error saving grouping: ${message}`);
+    }
+  };
+
+  // ------------------------------------
   // UI
   // ------------------------------------
   return (
     <div className="demo-container">
       <div className="demo-header">
         <h1>Route Planning – Drag & Drop</h1>
-        <button className="export-button" onClick={handleExportJSON}>
-          Export JSON
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            type="text"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            placeholder="Enter a name for this route set"
+            style={{ padding: "8px", minWidth: "250px" }}
+          />
+          <button className="export-button" onClick={handleSaveGrouping}>
+            Save to Database
+          </button>
+          <button className="export-button" onClick={onBack}>
+            Back to Homepage
+          </button>
+          <button className="export-button" onClick={handleExportJSON}>
+            Export JSON
+          </button>
+        </div>
       </div>
 
       <DndContext

@@ -145,6 +145,10 @@ function App() {
         filename={table.filename}
         columns={table.columns}
         groups={table.groups}
+        onBack={() => {
+          setTable(null);
+          fetchSavedGroupings();
+        }}
       />
     );
   }
