@@ -214,7 +214,7 @@ def balanced_kmeans(x, n_clusters, random_state=42):
 
     return cluster_labels, new_centers
 
-def dbscan(data, minpts):
+def dbscan(data, minpts=10):
     x = []
     radians = pi/180
     for i in data:
@@ -240,10 +240,10 @@ def dbscan(data, minpts):
 
     for k, points in clusters.items():
         clusters_deg[int(k)] = [
-            [
-                np.degrees(p[0]),
-                np.degrees(p[1])
-            ]
+            {
+                "latitude": np.degrees(p[0]),
+                "longitude": np.degrees(p[1])
+            }
         for p in points
         ]
 
@@ -252,20 +252,23 @@ def dbscan(data, minpts):
 
 def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
-    #Creating a cluster dictionary
-    cluster_dict = {}
+    #Creating a cluster dictionary for k-means
+    # cluster_dict = {}
 
-    for i in range(len(geocode_address_data)):
-        coordinates = {}
+    # for i in range(len(geocode_address_data)):
+    #     coordinates = {}
 
-        coordinates["latitude"] = geocode_address_data[i].get("latitude")
-        coordinates["longitude"] = geocode_address_data[i].get("longitude")
+    #     coordinates["latitude"] = geocode_address_data[i].get("latitude")
+    #     coordinates["longitude"] = geocode_address_data[i].get("longitude")
 
-        cluster_number = int(cluster_labels[i])
-        if cluster_number not in cluster_dict:
-            cluster_dict[cluster_number] = []
+    #     cluster_number = int(cluster_labels[i])
+    #     if cluster_number not in cluster_dict:
+    #         cluster_dict[cluster_number] = []
 
-        cluster_dict[cluster_number].append(coordinates)
+    #     cluster_dict[cluster_number].append(coordinates)
+
+    # cluster_dict for dbscan
+    cluster_dict = dbscan(geocode_address_data)
     
     # print("cluster_dict: ", cluster_dict)
 
@@ -581,6 +584,11 @@ def get_best_route(geocode_address_data, n_clusters, cluster_labels):
 
     cluster_paths = convert_indicies_to_lat_and_long(cluster_routes, cluster_dict)
 
-    print("cluster_paths: ", cluster_paths)
+    print("cluster_paths: ")
+
+    for cluster in cluster_paths:
+        print("Cluster", cluster)
+        for coordinates in cluster_paths[cluster][0]:
+            print("    ", coordinates)
 
     return cluster_paths
