@@ -64,6 +64,9 @@
 }
 
 .routes-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   text-align: left;
   border-radius: 12px;
   padding: 16px;
@@ -76,6 +79,10 @@
   margin: 0 0 0.5rem;
 }
 
+.routes-list-section h4 {
+  margin: 0 0 0.75rem;
+}
+
 .routes-sidebar-copy,
 .route-detail-card p {
   margin: 0 0 1rem;
@@ -83,23 +90,31 @@
   color: rgba(255, 255, 255, 0.72);
 }
 
+.routes-list-wrap {
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
 .routes-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: repeat(10, minmax(0, auto));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(190px, 220px);
   gap: 8px;
-  margin-bottom: 1rem;
+  width: max-content;
+  min-width: 100%;
 }
 
 .route-list-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   text-align: left;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.05);
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .route-list-item.selected {
@@ -125,8 +140,10 @@
 }
 
 .route-detail-card {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .route-links {
@@ -180,6 +197,14 @@
 
   .routes-map-layout {
     grid-template-columns: 1fr;
+  }
+
+  .routes-list {
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    grid-auto-columns: unset;
+    width: 100%;
+    min-width: 0;
   }
 }
 

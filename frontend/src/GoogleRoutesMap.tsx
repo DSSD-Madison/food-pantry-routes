@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { BackendBestRoutes, CardData, RouteItem } from "./DragDropDemo";
+import type { BackendBestRoutes, CardData } from "./DragDropDemo";
+import {
+  chunkStops,
+  prepareRoutesForExport,
+  type LatLngLiteral,
+  type PreparedRoute,
+  type RouteStop,
+} from "./routeExport";
 
 type GoogleMapInstance = {
   fitBounds: (bounds: GoogleLatLngBounds) => void;
@@ -103,33 +110,6 @@ type Props = {
   bestRoutes: BackendBestRoutes | null;
 };
 
-type LatLngLiteral = {
-  lat: number;
-  lng: number;
-};
-
-type RouteSegment = {
-  id: string;
-  stops: RouteStop[];
-  googleMapsUrl: string;
-};
-
-type RouteStop = {
-  id: string;
-  name: string;
-  address: string;
-  position: LatLngLiteral;
-};
-
-type PreparedRoute = {
-  id: string;
-  title: string;
-  color: string;
-  stops: RouteStop[];
-  exportSegments: RouteSegment[];
-  skippedStops: RouteItem[];
-};
-
 type RouteOverlay = {
   routeId: string;
   polylines: GooglePolyline[];
@@ -138,17 +118,6 @@ type RouteOverlay = {
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const MAX_STOPS_PER_DIRECTIONS_REQUEST = 25;
-const MAX_WAYPOINTS_PER_EXPORT_URL = 9;
-const ROUTE_COLORS = [
-  "#d1495b",
-  "#00798c",
-  "#edae49",
-  "#30638e",
-  "#6a4c93",
-  "#2a9d8f",
-  "#ff7f11",
-  "#3d348b",
-];
 
 let googleMapsApiPromise: Promise<GoogleMapsApi> | null = null;
 
@@ -201,144 +170,6 @@ function loadGoogleMapsApi(apiKey: string): Promise<GoogleMapsApi> {
   return googleMapsApiPromise;
 }
 
-function normalizeKey(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function findNumericValue(
-  row: Record<string, unknown>,
-  candidateKeys: string[]
-): number | null {
-  const normalizedCandidates = new Set(candidateKeys.map(normalizeKey));
-
-  for (const [key, value] of Object.entries(row)) {
-    if (!normalizedCandidates.has(normalizeKey(key))) {
-      continue;
-    }
-
-    const numericValue =
-      typeof value === "number"
-        ? value
-        : typeof value === "string"
-          ? Number.parseFloat(value)
-          : Number.NaN;
-
-    if (Number.isFinite(numericValue)) {
-      return numericValue;
-    }
-  }
-
-  return null;
-}
-
-function extractLatLng(raw: Record<string, unknown>): LatLngLiteral | null {
-  const lat = findNumericValue(raw, [
-    "lat",
-    "latitude",
-    "y",
-    "start_lat",
-    "startLatitude",
-  ]);
-  const lng = findNumericValue(raw, [
-    "lng",
-    "lon",
-    "long",
-    "longitude",
-    "x",
-    "start_lng",
-    "startLongitude",
-  ]);
-
-  if (lat === null || lng === null) {
-    return null;
-  }
-
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    return null;
-  }
-
-  return { lat, lng };
-}
-
-function buildStopsFromBackendRoute(
-  routeId: string,
-  backendStops: Array<Record<string, unknown>>
-): RouteStop[] {
-  return backendStops
-    .map((backendStop, index) => {
-      const position = extractLatLng(backendStop);
-      if (!position) {
-        return null;
-      }
-
-      const name =
-        typeof backendStop.name === "string"
-          ? backendStop.name
-          : typeof backendStop.Name === "string"
-            ? backendStop.Name
-            : `Stop ${index + 1}`;
-      const address =
-        typeof backendStop.Location === "string"
-          ? backendStop.Location
-          : typeof backendStop.Address === "string"
-            ? backendStop.Address
-            : typeof backendStop.address === "string"
-              ? backendStop.address
-              : "";
-
-      return {
-        id: `${routeId}-${index + 1}`,
-        name,
-        address,
-        position,
-      };
-    })
-    .filter((stop): stop is RouteStop => stop !== null);
-}
-
-function chunkStops(stops: RouteStop[], maxStopsPerChunk: number) {
-  if (stops.length <= maxStopsPerChunk) {
-    return [stops];
-  }
-
-  const chunks: RouteStop[][] = [];
-  const step = maxStopsPerChunk - 1;
-
-  for (let startIndex = 0; startIndex < stops.length - 1; startIndex += step) {
-    const chunk = stops.slice(startIndex, startIndex + maxStopsPerChunk);
-    if (chunk.length >= 2) {
-      chunks.push(chunk);
-    }
-  }
-
-  return chunks;
-}
-
-function buildGoogleMapsDirectionsUrl(stops: RouteStop[]) {
-  const origin = `${stops[0].position.lat},${stops[0].position.lng}`;
-  const destination = `${stops[stops.length - 1].position.lat},${
-    stops[stops.length - 1].position.lng
-  }`;
-  const waypoints = stops
-    .slice(1, -1)
-    .map((stop) => `${stop.position.lat},${stop.position.lng}`)
-    .join("|");
-
-  const params = new URLSearchParams({
-    api: "1",
-    origin,
-    destination,
-    travelmode: "driving",
-    dir_action: "navigate",
-  });
-
-  if (waypoints) {
-    params.set("waypoints", waypoints);
-  }
-
-  return `https://www.google.com/maps/dir/?${params.toString()}`;
-}
-
 function buildDirectionsRequest(stops: RouteStop[]) {
   return {
     origin: stops[0].position,
@@ -373,55 +204,7 @@ export default function GoogleRoutesMap({ routes, bestRoutes }: Props) {
   const [isRendering, setIsRendering] = useState(false);
 
   const preparedRoutes = useMemo<PreparedRoute[]>(() => {
-    return routes.map((route, routeIndex) => {
-      const clusterRoutes = bestRoutes?.[String(routeIndex)];
-      const backendStops =
-        clusterRoutes && clusterRoutes !== "No Solution"
-          ? Object.entries(clusterRoutes)
-              .sort(([routeIdA], [routeIdB]) => Number(routeIdA) - Number(routeIdB))
-              .flatMap(([backendRouteId, backendRouteStops]) =>
-                buildStopsFromBackendRoute(
-                  `${route.id}-${backendRouteId}`,
-                  backendRouteStops
-                )
-              )
-          : [];
-
-      const skippedStops: RouteItem[] = [];
-      const fallbackStops: RouteStop[] = [];
-
-      route.items.forEach((item) => {
-        const position = extractLatLng(item.raw);
-        if (!position) {
-          skippedStops.push(item);
-          return;
-        }
-
-        fallbackStops.push({
-          id: item.id,
-          name: item.name,
-          address: item.address,
-          position,
-        });
-      });
-
-      const stops = backendStops.length >= 2 ? backendStops : fallbackStops;
-
-      const exportChunks = chunkStops(stops, MAX_WAYPOINTS_PER_EXPORT_URL + 2);
-
-      return {
-        id: route.id,
-        title: route.title,
-        color: ROUTE_COLORS[routeIndex % ROUTE_COLORS.length],
-        stops,
-        exportSegments: exportChunks.map((chunk, index) => ({
-          id: `${route.id}-segment-${index + 1}`,
-          stops: chunk,
-          googleMapsUrl: buildGoogleMapsDirectionsUrl(chunk),
-        })),
-        skippedStops,
-      };
-    });
+    return prepareRoutesForExport(routes, bestRoutes);
   }, [bestRoutes, routes]);
 
   const selectedRoute =
@@ -529,7 +312,7 @@ export default function GoogleRoutesMap({ routes, bestRoutes }: Props) {
             const markerStops =
               chunkIndex === 0 ? chunk : chunk.slice(1);
 
-            markerStops.forEach((stop, stopOffset) => {
+            markerStops.forEach((stop: RouteStop, stopOffset: number) => {
               const marker = new googleApi.maps.Marker({
                 map,
                 position: stop.position,
@@ -623,32 +406,37 @@ export default function GoogleRoutesMap({ routes, bestRoutes }: Props) {
           Click a route line or a stop marker to view its export links.
         </p>
 
-        <div className="routes-list">
-          {preparedRoutes.map((route) => {
-            const isSelected = route.id === selectedRouteId;
-            const canRender = route.stops.length >= 2;
+        <div className="routes-list-section">
+          <h4>Select a group</h4>
+          <div className="routes-list-wrap">
+            <div className="routes-list">
+              {preparedRoutes.map((route) => {
+                const isSelected = route.id === selectedRouteId;
+                const canRender = route.stops.length >= 2;
 
-            return (
-              <button
-                key={route.id}
-                type="button"
-                className={`route-list-item${isSelected ? " selected" : ""}`}
-                onClick={() => setSelectedRouteId(route.id)}
-                disabled={!canRender}
-              >
-                <span
-                  className="route-swatch"
-                  style={{ backgroundColor: route.color }}
-                />
-                <span className="route-list-text">
-                  {route.title} ({route.stops.length} mapped)
-                  {route.skippedStops.length > 0
-                    ? `, ${route.skippedStops.length} skipped`
-                    : ""}
-                </span>
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={route.id}
+                    type="button"
+                    className={`route-list-item${isSelected ? " selected" : ""}`}
+                    onClick={() => setSelectedRouteId(route.id)}
+                    disabled={!canRender}
+                  >
+                    <span
+                      className="route-swatch"
+                      style={{ backgroundColor: route.color }}
+                    />
+                    <span className="route-list-text">
+                      {route.title} ({route.stops.length} mapped)
+                      {route.skippedStops.length > 0
+                        ? `, ${route.skippedStops.length} skipped`
+                        : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {selectedRoute && (

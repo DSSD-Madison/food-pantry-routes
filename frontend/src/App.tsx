@@ -40,9 +40,9 @@ function App() {
   const [numGroups, setNumGroups] = useState<number>(2);
   const [clusteringMethod, setClusteringMethod] = useState<
     "balanced_kmeans" | "dbscan"
-  >("balanced_kmeans");
+  >("dbscan");
   const [dbscanMinSamples, setDbscanMinSamples] = useState<number>(2);
-  const [dbscanEpsilonMeters, setDbscanEpsilonMeters] = useState<number>(1500);
+  const [dbscanEpsilonMeters, setDbscanEpsilonMeters] = useState<number>(200);
   const [table, setTable] = useState<TableResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,6 +141,8 @@ function App() {
   // Load saved grouping
   // ------------------------------
   const handleLoadGrouping = (grouping: SavedGrouping) => {
+    if (loading) return;
+
     setTable({
       filename: grouping.filename,
       columns: grouping.columns,
@@ -154,6 +156,8 @@ function App() {
   // Delete saved grouping
   // ------------------------------
   const handleDeleteGrouping = async (id: string) => {
+    if (loading) return;
+
     if (!confirm("Are you sure you want to delete this grouping?")) return;
 
     try {
@@ -191,15 +195,17 @@ function App() {
   // ----------------------------------------------------
   return (
     <div>
-      <h1>Spreadsheet Uploader</h1>
+      <h1>BPNN Route Generator</h1>
 
       <div className="card" style={{ marginTop: "1rem" }}>
-        <h2>Upload a spreadsheet</h2>
+        <h2>Upload a spreadsheet here!</h2>
+        <p>Accepted formats: Excel, CSV</p>
 
         <input
           type="file"
           accept=".csv,.xlsx,.xls"
           onChange={handleFileChange}
+          disabled={loading}
         />
 
         <div style={{ marginTop: "1rem" }}>
@@ -212,6 +218,7 @@ function App() {
               )
             }
             style={{ marginLeft: "0.5rem" }}
+            disabled={loading}
           >
             <option value="balanced_kmeans">Balanced K-Means</option>
             <option value="dbscan">DBSCAN</option>
@@ -227,29 +234,32 @@ function App() {
               onChange={(e) => setNumGroups(Number(e.target.value))}
               style={{ marginLeft: "0.5rem", width: "80px" }}
               min={1}
+              disabled={loading}
             />
           </div>
         ) : (
           <>
             <div style={{ marginTop: "1rem" }}>
               <label>DBSCAN Min Samples:</label>
-              <input
-                type="number"
-                value={dbscanMinSamples}
-                onChange={(e) => setDbscanMinSamples(Number(e.target.value))}
-                style={{ marginLeft: "0.5rem", width: "80px" }}
-                min={1}
-              />
+                <input
+                  type="number"
+                  value={dbscanMinSamples}
+                  onChange={(e) => setDbscanMinSamples(Number(e.target.value))}
+                  style={{ marginLeft: "0.5rem", width: "80px" }}
+                  min={1}
+                  disabled={loading}
+                />
             </div>
             <div style={{ marginTop: "1rem" }}>
               <label>DBSCAN Epsilon (meters):</label>
-              <input
-                type="number"
-                value={dbscanEpsilonMeters}
-                onChange={(e) => setDbscanEpsilonMeters(Number(e.target.value))}
-                style={{ marginLeft: "0.5rem", width: "100px" }}
-                min={1}
-              />
+                <input
+                  type="number"
+                  value={dbscanEpsilonMeters}
+                  onChange={(e) => setDbscanEpsilonMeters(Number(e.target.value))}
+                  style={{ marginLeft: "0.5rem", width: "100px" }}
+                  min={1}
+                  disabled={loading}
+                />
             </div>
           </>
         )}
@@ -270,6 +280,12 @@ function App() {
           </p>
         )}
 
+        {loading && (
+          <p style={{ marginTop: "0.5rem", color: "#555" }}>
+            Upload in progress. Settings are locked until processing finishes.
+          </p>
+        )}
+
         {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
       </div>
 
@@ -279,6 +295,7 @@ function App() {
         <button
           onClick={() => setShowSaved(!showSaved)}
           style={{ marginBottom: "1rem" }}
+          disabled={loading}
         >
           {showSaved ? "Hide" : "Show"} Saved Groupings ({savedGroupings.length})
         </button>
@@ -313,6 +330,7 @@ function App() {
                         <button
                           onClick={() => handleDeleteGrouping(grouping.id)}
                           style={{ background: "#dc3545" }}
+                          disabled={loading}
                         >
                           Delete
                         </button>

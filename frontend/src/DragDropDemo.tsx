@@ -16,6 +16,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import "./DragDropDemo.css";
 import GoogleRoutesMap from "./GoogleRoutesMap";
+import { prepareRoutesForExport } from "./routeExport";
 
 // -----------------------------
 // Types
@@ -57,6 +58,28 @@ function getStringValue(value: unknown, fallback = "") {
   }
 
   return fallback;
+}
+
+function getDisplayName(row: Record<string, unknown>, fallbackColumn?: string) {
+  const firstName = getStringValue(row["First"] ?? row["first"]).trim();
+  const lastName = getStringValue(row["Last"] ?? row["last"]).trim();
+
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  }
+
+  if (firstName) {
+    return firstName;
+  }
+
+  if (lastName) {
+    return lastName;
+  }
+
+  return getStringValue(
+    row["name"] ?? row["Name"] ?? (fallbackColumn ? row[fallbackColumn] : undefined),
+    "Unknown"
+  );
 }
 
 // -----------------------------
@@ -140,10 +163,7 @@ export default function DragDropDemo({
       title: `Group ${index + 1}`,
       items: group.map((row, rowIndex) => ({
         id: `g${index}-row${rowIndex}`,
-        name: getStringValue(
-          row["name"] ?? row["Name"] ?? row[columns[0]],
-          "Unknown"
-        ),
+        name: getDisplayName(row, columns[0]),
         address: getStringValue(row["location"] ?? row["Location"]),
         contact: getStringValue(row["contact"] ?? row["Contact"]),
         priority: Number(row["priority"] || row["Priority"] || rowIndex + 1),
@@ -154,6 +174,10 @@ export default function DragDropDemo({
 
   const [cards, setCards] = useState<CardData[]>(initialCards);
   const [activeItem, setActiveItem] = useState<RouteItem | null>(null);
+  const preparedRoutes = useMemo(
+    () => prepareRoutesForExport(cards, bestRoutes),
+    [bestRoutes, cards]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -243,6 +267,43 @@ export default function DragDropDemo({
     URL.revokeObjectURL(url);
   };
 
+  const handleExportRouteLinks = () => {
+    const textSections = preparedRoutes.map((route) => {
+      const headerLines = [
+        route.title,
+        `Mapped stops: ${route.stops.length}`,
+        `Skipped stops: ${route.skippedStops.length}`,
+      ];
+
+      if (route.exportSegments.length === 0) {
+        return [
+          ...headerLines,
+          "Links: At least two mapped stops are required to export directions.",
+        ].join("\n");
+      }
+
+      const linkLines = route.exportSegments.map((segment, index) => {
+        const label =
+          route.exportSegments.length > 1
+            ? `Part ${index + 1}`
+            : "Route link";
+
+        return `${label}: ${segment.googleMapsUrl}`;
+      });
+
+      return [...headerLines, ...linkLines].join("\n");
+    });
+
+    const blob = new Blob([textSections.join("\n\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}-route-links.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // ------------------------------------
   // UI
   // ------------------------------------
@@ -250,13 +311,16 @@ export default function DragDropDemo({
   return (
     <div className="demo-container">
       <div className="demo-header">
-        <h1>Route Planning – Drag & Drop</h1>
+        <h1>Route Planning Map</h1>
         <div className="button-row">
           <button className="export-button" onClick={() => (window.location.href = "/")}>
             Back to Home
           </button>
           <button className="export-button" onClick={handleExportJSON}>
             Export JSON
+          </button>
+          <button className="export-button" onClick={handleExportRouteLinks}>
+            Export Route Links
           </button>
         </div>
       </div>
