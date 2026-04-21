@@ -20,6 +20,9 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
 CACHE_FILE = "geocode_cache.json"
+OSRM_RETRY_ATTEMPTS = 3
+OSRM_RETRY_DELAY_SECONDS = 2
+OSRM_TIMEOUT_SECONDS = 30
 GEOLOCATOR_TIMEOUT = 10
 
 def load_cache():
@@ -272,6 +275,61 @@ def balanced_kmeans(x, n_clusters, random_state=42):
 
     return cluster_labels, new_centers
 
+
+def fetch_osrm_distances(url, cluster, attempt_count=OSRM_RETRY_ATTEMPTS):
+    last_error = None
+
+    for attempt in range(1, attempt_count + 1):
+        try:
+            osrm_response = requests.get(url, timeout=OSRM_TIMEOUT_SECONDS)
+        except requests.RequestException as error:
+            last_error = Exception(
+                f"OSRM request failed for cluster {cluster} on attempt "
+                f"{attempt}/{attempt_count}: {error}"
+            )
+        else:
+            if osrm_response.status_code == 200:
+                try:
+                    data = osrm_response.json()
+                except ValueError as error:
+                    raise Exception(
+                        f"OSRM API returned invalid JSON for cluster {cluster}: {error}"
+                    ) from error
+
+                if data.get("code") != "Ok":
+                    raise Exception(
+                        f"OSRM API returned an error for cluster {cluster}: "
+                        f"{data.get('code')} - {data.get('message', 'No message provided')}"
+                    )
+
+                if "distances" not in data:
+                    raise Exception(
+                        f"OSRM API response missing 'distances' key for cluster {cluster}"
+                    )
+
+                distance_data = data["distances"]
+                if len(distance_data) == 0:
+                    raise Exception(
+                        f"OSRM API returned an empty distance matrix for cluster {cluster}"
+                    )
+
+                return distance_data
+
+            last_error = Exception(
+                f"OSRM API request failed with status code {osrm_response.status_code} "
+                f"for cluster {cluster} on attempt {attempt}/{attempt_count}"
+            )
+
+            if osrm_response.status_code not in {429, 500, 502, 503, 504}:
+                break
+
+        if attempt < attempt_count:
+            time.sleep(OSRM_RETRY_DELAY_SECONDS * attempt)
+
+    raise last_error if last_error is not None else Exception(
+        f"OSRM request failed for cluster {cluster}"
+    )
+
 def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
     #Creating a cluster dictionary
@@ -316,32 +374,7 @@ def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
             # By default the json response gives duration (time in seconds) instead of distance(m), so we have to specify
             url = "http://router.project-osrm.org/table/v1/driving/" + addresses_string + "?annotations=distance"
-            osrm_response = requests.get(url)
-
-            # Check the HTTP status code
-            if osrm_response.status_code != 200:
-                raise Exception(f"OSRM API request failed with status code {osrm_response.status_code} for cluster {cluster}")
-
-            try:
-                data = osrm_response.json()
-            except ValueError:
-                raise Exception(f"OSRM API returned invalid JSON for cluster {cluster}")
-
-            # Check the OSRM response has a valid code
-            if data.get("code") != "Ok":
-                raise Exception(f"OSRM API returned an error: {data.get('code')} - {data.get('message', 'No message provided')}")
-
-            # Check the distances key actually exists
-            if "distances" not in data:
-                raise Exception(f"OSRM API response missing 'distances' key for cluster {cluster}")
-
-            distance_data = data["distances"]
-
-            # Check the matrix has the expected dimensions
-            if len(distance_data) == 0:
-                raise Exception(f"OSRM API returned an empty distance matrix for cluster {cluster}")
-
-            distance_matrices[cluster] = distance_data
+            distance_matrices[cluster] = fetch_osrm_distances(url, cluster)
 
         # Split the distance matrix into parts if it is too big and rejoin it later
         else:
@@ -409,30 +442,7 @@ def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
                         final_addresses_string = ";".join(row_str_list + col_str_list)
                         url = "http://router.project-osrm.org/table/v1/driving/" + final_addresses_string + "?annotations=distance" + "&sources=" + sources_str + "&destinations=" + dest_str                    
 
-                    osrm_response = requests.get(url)
-
-                    # Check the HTTP status code
-                    if osrm_response.status_code != 200:
-                        raise Exception(f"OSRM API request failed with status code {osrm_response.status_code} for cluster {cluster}")
-
-                    try:
-                        data = osrm_response.json()
-                    except ValueError:
-                        raise Exception(f"OSRM API returned invalid JSON for cluster {cluster}")
-
-                    # Check the OSRM response has a valid code
-                    if data.get("code") != "Ok":
-                        raise Exception(f"OSRM API returned an error: {data.get('code')} - {data.get('message', 'No message provided')}")
-
-                    # Check the distances key actually exists
-                    if "distances" not in data:
-                        raise Exception(f"OSRM API response missing 'distances' key for cluster {cluster}")
-
-                    distance_data = data["distances"]
-
-                    # Check the matrix has the expected dimensions
-                    if len(distance_data) == 0:
-                        raise Exception(f"OSRM API returned an empty distance matrix for cluster {cluster}")
+                    distance_data = fetch_osrm_distances(url, cluster)
 
                     # Looping through the returned data to put in the overall cluster distance matrix
                     for distance_li_index in range(len(distance_data)):

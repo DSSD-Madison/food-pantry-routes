@@ -143,11 +143,15 @@ async def upload_spreadsheet(
 
         groups[group].append(location_dict)
 
-    best_routes = bpn_osm_and_kmeans.get_best_route(
-        geocoded_data,
-        group_count,
-        cluster_labels,
-    )
+    try:
+        best_routes = bpn_osm_and_kmeans.get_best_route(
+            geocoded_data,
+            group_count,
+            cluster_labels,
+        )
+    except Exception as e:
+        print(f"Warning: Failed to generate best routes: {str(e)}")
+        best_routes = None
     
     # Elbow method for kmeans
     # elbow_method.elbow_method_graph(x)
