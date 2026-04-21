@@ -20,6 +20,9 @@ from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
 CACHE_FILE = "geocode_cache.json"
+OSRM_RETRY_ATTEMPTS = 3
+OSRM_RETRY_DELAY_SECONDS = 2
+OSRM_TIMEOUT_SECONDS = 30
 GEOLOCATOR_TIMEOUT = 10
 
 def load_cache():
@@ -98,13 +101,76 @@ def geocode_addresses(address_list):
 
     return geocoded_locations
 
-def get_groups(data, n_clusters):
+def dbscan_labels(data, minpts, epsilon_meters=200):
+    x = []
+    radians = pi/180
+    for i in data:
+        x.append([i.get("latitude") * radians, i.get("longitude") * radians])
+    x = np.array(x)
+
+    epsilon = epsilon_meters / 6371000
+    db = DBSCAN(eps=epsilon, min_samples=minpts, metric="haversine").fit(x)
+    return db.labels_
+
+
+def remap_dbscan_labels(labels, x):
+    unique_cluster_labels = sorted(label for label in set(labels) if label != -1)
+
+    if not unique_cluster_labels:
+        fallback_clusters = min(max(1, len(x) // 8), len(x))
+        fallback_labels, _ = balanced_kmeans(x, fallback_clusters)
+        return fallback_labels
+
+    cluster_points = {
+        label: x[np.array(labels) == label]
+        for label in unique_cluster_labels
+    }
+    cluster_centers = {
+        label: points.mean(axis=0)
+        for label, points in cluster_points.items()
+    }
+
+    reassigned_labels = []
+    for point, label in zip(x, labels):
+        if label != -1:
+            reassigned_labels.append(label)
+            continue
+
+        nearest_label = min(
+            unique_cluster_labels,
+            key=lambda cluster_label: np.sum((point - cluster_centers[cluster_label]) ** 2),
+        )
+        reassigned_labels.append(nearest_label)
+
+    normalized_unique_labels = sorted(set(reassigned_labels))
+    label_map = {
+        label: index
+        for index, label in enumerate(normalized_unique_labels)
+    }
+
+    return np.array([label_map[label] for label in reassigned_labels], dtype=int)
+
+
+def get_groups(
+    data,
+    n_clusters,
+    method="balanced_kmeans",
+    dbscan_min_samples=2,
+    dbscan_epsilon_meters=200,
+):
     x = np.array([[i["latitude"], i["longitude"]] for i in data])
 
+    if method == "dbscan":
+        raw_labels = dbscan_labels(data, dbscan_min_samples, dbscan_epsilon_meters)
+        cluster_labels = remap_dbscan_labels(raw_labels, x)
+        unique_labels = sorted(set(cluster_labels.tolist()))
+        cluster_centers = np.array([
+            x[cluster_labels == label].mean(axis=0)
+            for label in unique_labels
+        ])
+        return (cluster_labels, cluster_centers, x)
+
     cluster_labels, cluster_centers = balanced_kmeans(x, n_clusters)
-
-    # print("Cluster Labels: ", cluster_labels)
-
     return (cluster_labels, cluster_centers, x)
 
 # def get_groups(data, n_clusters):
@@ -151,12 +217,6 @@ def generate_kmeans_grouping_graph(geocode_address_data, n_clusters, cluster_lab
     cluster = int(cluster_labels[i])
     color = cluster_colors[cluster]
     colors.append(color)
-
-  # Calling distance_matrix temporarily
-#   distance_matrix(geocode_address_data, n_clusters, cluster_labels)
-  # getting the best routes
-  get_best_route(geocode_address_data, n_clusters, cluster_labels)
-
 
   # plt.plot(latitude,longitude,'o')
   plt.scatter(latitude, longitude, c=colors)
@@ -215,41 +275,60 @@ def balanced_kmeans(x, n_clusters, random_state=42):
 
     return cluster_labels, new_centers
 
-def dbscan(data, minpts):
-    x = []
-    radians = pi/180
-    for i in data:
-        x.append([i.get("latitude") * radians,i.get("longitude") * radians])
-    x= np.array(x)
 
-    epsilon = 200/6371000
+def fetch_osrm_distances(url, cluster, attempt_count=OSRM_RETRY_ATTEMPTS):
+    last_error = None
 
-    db = DBSCAN(eps=epsilon, min_samples=minpts, metric="haversine").fit(x)
-    core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-    core_samples_mask[db.core_sample_indices_] = True
-    labels = db.labels_
+    for attempt in range(1, attempt_count + 1):
+        try:
+            osrm_response = requests.get(url, timeout=OSRM_TIMEOUT_SECONDS)
+        except requests.RequestException as error:
+            last_error = Exception(
+                f"OSRM request failed for cluster {cluster} on attempt "
+                f"{attempt}/{attempt_count}: {error}"
+            )
+        else:
+            if osrm_response.status_code == 200:
+                try:
+                    data = osrm_response.json()
+                except ValueError as error:
+                    raise Exception(
+                        f"OSRM API returned invalid JSON for cluster {cluster}: {error}"
+                    ) from error
 
-    clusters = defaultdict(list)
+                if data.get("code") != "Ok":
+                    raise Exception(
+                        f"OSRM API returned an error for cluster {cluster}: "
+                        f"{data.get('code')} - {data.get('message', 'No message provided')}"
+                    )
 
-    for point, label in zip(x, labels):
-        if label != -1:
-            clusters[label].append(point)
+                if "distances" not in data:
+                    raise Exception(
+                        f"OSRM API response missing 'distances' key for cluster {cluster}"
+                    )
 
-    clusters = dict(clusters)
+                distance_data = data["distances"]
+                if len(distance_data) == 0:
+                    raise Exception(
+                        f"OSRM API returned an empty distance matrix for cluster {cluster}"
+                    )
 
-    clusters_deg = {}
+                return distance_data
 
-    for k, points in clusters.items():
-        clusters_deg[int(k)] = [
-            [
-                np.degrees(p[0]),
-                np.degrees(p[1])
-            ]
-        for p in points
-        ]
+            last_error = Exception(
+                f"OSRM API request failed with status code {osrm_response.status_code} "
+                f"for cluster {cluster} on attempt {attempt}/{attempt_count}"
+            )
 
-    return clusters_deg
+            if osrm_response.status_code not in {429, 500, 502, 503, 504}:
+                break
 
+        if attempt < attempt_count:
+            time.sleep(OSRM_RETRY_DELAY_SECONDS * attempt)
+
+    raise last_error if last_error is not None else Exception(
+        f"OSRM request failed for cluster {cluster}"
+    )
 
 def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
@@ -274,6 +353,9 @@ def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
     #Creating a distance matrix for each group
     for cluster in cluster_dict:
+        if len(cluster_dict[cluster]) < 2:
+            distance_matrices[cluster] = [[0]]
+            continue
         
         # Calling the OSRM API for the distances between locations 
 
@@ -292,32 +374,7 @@ def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
 
             # By default the json response gives duration (time in seconds) instead of distance(m), so we have to specify
             url = "http://router.project-osrm.org/table/v1/driving/" + addresses_string + "?annotations=distance"
-            osrm_response = requests.get(url)
-
-            # Check the HTTP status code
-            if osrm_response.status_code != 200:
-                raise Exception(f"OSRM API request failed with status code {osrm_response.status_code} for cluster {cluster}")
-
-            try:
-                data = osrm_response.json()
-            except ValueError:
-                raise Exception(f"OSRM API returned invalid JSON for cluster {cluster}")
-
-            # Check the OSRM response has a valid code
-            if data.get("code") != "Ok":
-                raise Exception(f"OSRM API returned an error: {data.get('code')} - {data.get('message', 'No message provided')}")
-
-            # Check the distances key actually exists
-            if "distances" not in data:
-                raise Exception(f"OSRM API response missing 'distances' key for cluster {cluster}")
-
-            distance_data = data["distances"]
-
-            # Check the matrix has the expected dimensions
-            if len(distance_data) == 0:
-                raise Exception(f"OSRM API returned an empty distance matrix for cluster {cluster}")
-
-            distance_matrices[cluster] = distance_data
+            distance_matrices[cluster] = fetch_osrm_distances(url, cluster)
 
         # Split the distance matrix into parts if it is too big and rejoin it later
         else:
@@ -385,30 +442,7 @@ def distance_matrix(geocode_address_data, n_clusters, cluster_labels):
                         final_addresses_string = ";".join(row_str_list + col_str_list)
                         url = "http://router.project-osrm.org/table/v1/driving/" + final_addresses_string + "?annotations=distance" + "&sources=" + sources_str + "&destinations=" + dest_str                    
 
-                    osrm_response = requests.get(url)
-
-                    # Check the HTTP status code
-                    if osrm_response.status_code != 200:
-                        raise Exception(f"OSRM API request failed with status code {osrm_response.status_code} for cluster {cluster}")
-
-                    try:
-                        data = osrm_response.json()
-                    except ValueError:
-                        raise Exception(f"OSRM API returned invalid JSON for cluster {cluster}")
-
-                    # Check the OSRM response has a valid code
-                    if data.get("code") != "Ok":
-                        raise Exception(f"OSRM API returned an error: {data.get('code')} - {data.get('message', 'No message provided')}")
-
-                    # Check the distances key actually exists
-                    if "distances" not in data:
-                        raise Exception(f"OSRM API response missing 'distances' key for cluster {cluster}")
-
-                    distance_data = data["distances"]
-
-                    # Check the matrix has the expected dimensions
-                    if len(distance_data) == 0:
-                        raise Exception(f"OSRM API returned an empty distance matrix for cluster {cluster}")
+                    distance_data = fetch_osrm_distances(url, cluster)
 
                     # Looping through the returned data to put in the overall cluster distance matrix
                     for distance_li_index in range(len(distance_data)):
@@ -456,6 +490,28 @@ def print_solution(data, manager, routing, solution):
         max_route_distance = max(route_distance, max_route_distance)
 
     return solution.ObjectiveValue(), solution_data, max_route_distance
+
+
+def choose_open_route_endpoints(distance_matrix):
+    max_distance = -1
+    start_index = 0
+    end_index = len(distance_matrix) - 1
+
+    for row_index in range(len(distance_matrix)):
+        for col_index in range(len(distance_matrix[row_index])):
+            if row_index == col_index:
+                continue
+
+            current_distance = distance_matrix[row_index][col_index]
+            if current_distance is None:
+                continue
+
+            if current_distance > max_distance:
+                max_distance = current_distance
+                start_index = row_index
+                end_index = col_index
+
+    return start_index, end_index
 
 def convert_indicies_to_lat_and_long(cluster_routes, cluster_dict):
     
@@ -506,16 +562,34 @@ def get_best_route(geocode_address_data, n_clusters, cluster_labels):
 
         cluster_data = {}
 
+        if len(cluster_dict[cluster]) < 2:
+            cluster_data["distance_matrix"] = [[0]]
+            cluster_data["routes_data"] = {
+                0: {
+                    "route_distance": 0,
+                    "route_plan": "Route for vehicle 0:\n 0\nDistance of the route: 0m\n",
+                }
+            }
+            cluster_data["objective"] = 0
+            cluster_data["max_route_distance"] = 0
+            cluster_routes[cluster] = cluster_data
+            continue
+
         # creating the dictionary to pass to OR-tools
 
         data = {}
         data["distance_matrix"] = cluster_distance_matrix[cluster]
         data["num_vehicles"] = 1 # change num_vehicles to how many ever needed
-        data["depot"] = 0 # index for the starting location
+        start_index, end_index = choose_open_route_endpoints(data["distance_matrix"])
+        data["starts"] = [start_index]
+        data["ends"] = [end_index]
 
         # creating a routing index manager
         manager = pywrapcp.RoutingIndexManager(
-            len(data["distance_matrix"]), data["num_vehicles"], data["depot"]
+            len(data["distance_matrix"]),
+            data["num_vehicles"],
+            data["starts"],
+            data["ends"],
         )
 
         # create routing model

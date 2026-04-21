@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import DragDropDemo from "./DragDropDemo";
+import type { BackendBestRoutes } from "./DragDropDemo";
 
 type TableResponse = {
   filename: string;
   columns: string[];
-  groups: Record<string, any>[][];
+  groups: Record<string, unknown>[][];
+  best_routes?: Record<string, unknown> | null;
 };
 
 type SavedGrouping = {
@@ -13,9 +15,22 @@ type SavedGrouping = {
   filename: string;
   number_of_groups: number;
   columns: string[];
-  groups: Record<string, any>[][];
+  groups: Record<string, unknown>[][];
+  best_routes?: Record<string, unknown> | null;
   created_at: string;
 };
+
+type GroupingsResponse = {
+  groupings?: SavedGrouping[];
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return fallback;
+}
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -23,6 +38,11 @@ const API_BASE_URL =
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [numGroups, setNumGroups] = useState<number>(2);
+  const [clusteringMethod, setClusteringMethod] = useState<
+    "balanced_kmeans" | "dbscan"
+  >("dbscan");
+  const [dbscanMinSamples, setDbscanMinSamples] = useState<number>(2);
+  const [dbscanEpsilonMeters, setDbscanEpsilonMeters] = useState<number>(200);
   const [table, setTable] = useState<TableResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +60,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE_URL}/groupings`);
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as GroupingsResponse;
         setSavedGroupings(data.groupings || []);
       }
     } catch (err) {
@@ -66,8 +86,21 @@ function App() {
       return;
     }
 
-    if (!numGroups || numGroups <= 0) {
+    if (clusteringMethod === "balanced_kmeans" && (!numGroups || numGroups <= 0)) {
       setError("Please enter a valid number of groups.");
+      return;
+    }
+
+    if (clusteringMethod === "dbscan" && (!dbscanMinSamples || dbscanMinSamples <= 0)) {
+      setError("Please enter a valid DBSCAN min samples value.");
+      return;
+    }
+
+    if (
+      clusteringMethod === "dbscan" &&
+      (!dbscanEpsilonMeters || dbscanEpsilonMeters <= 0)
+    ) {
+      setError("Please enter a valid DBSCAN epsilon value.");
       return;
     }
 
@@ -78,6 +111,9 @@ function App() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("number_of_groups", numGroups.toString());
+      formData.append("clustering_method", clusteringMethod);
+      formData.append("dbscan_min_samples", dbscanMinSamples.toString());
+      formData.append("dbscan_epsilon_meters", dbscanEpsilonMeters.toString());
 
       const res = await fetch(`${API_BASE_URL}/upload-spreadsheet`, {
         method: "POST",
@@ -94,8 +130,8 @@ function App() {
       const data = (await res.json()) as TableResponse;
 
       setTable(data);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong while uploading.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Something went wrong while uploading."));
     } finally {
       setLoading(false);
     }
@@ -105,10 +141,13 @@ function App() {
   // Load saved grouping
   // ------------------------------
   const handleLoadGrouping = (grouping: SavedGrouping) => {
+    if (loading) return;
+
     setTable({
       filename: grouping.filename,
       columns: grouping.columns,
       groups: grouping.groups,
+      best_routes: grouping.best_routes ?? null,
     });
     setShowSaved(false);
   };
@@ -117,6 +156,8 @@ function App() {
   // Delete saved grouping
   // ------------------------------
   const handleDeleteGrouping = async (id: string) => {
+    if (loading) return;
+
     if (!confirm("Are you sure you want to delete this grouping?")) return;
 
     try {
@@ -130,8 +171,8 @@ function App() {
       } else {
         throw new Error("Failed to delete");
       }
-    } catch (err: any) {
-      alert(`Error deleting grouping: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error deleting grouping: ${getErrorMessage(err, "Unknown error")}`);
     }
   };
 
@@ -144,6 +185,7 @@ function App() {
         filename={table.filename}
         columns={table.columns}
         groups={table.groups}
+        bestRoutes={(table.best_routes as BackendBestRoutes | null) ?? null}
       />
     );
   }
@@ -153,27 +195,74 @@ function App() {
   // ----------------------------------------------------
   return (
     <div>
-      <h1>Spreadsheet Uploader</h1>
+      <h1>BPNN Route Generator</h1>
 
       <div className="card" style={{ marginTop: "1rem" }}>
-        <h2>Upload a spreadsheet</h2>
+        <h2>Upload a spreadsheet here!</h2>
+        <p>Accepted formats: Excel, CSV</p>
 
         <input
           type="file"
           accept=".csv,.xlsx,.xls"
           onChange={handleFileChange}
+          disabled={loading}
         />
 
         <div style={{ marginTop: "1rem" }}>
-          <label>Number of Groups:</label>
-          <input
-            type="number"
-            value={numGroups}
-            onChange={(e) => setNumGroups(Number(e.target.value))}
-            style={{ marginLeft: "0.5rem", width: "80px" }}
-            min={1}
-          />
+          <label>Clustering Method:</label>
+          <select
+            value={clusteringMethod}
+            onChange={(e) =>
+              setClusteringMethod(
+                e.target.value as "balanced_kmeans" | "dbscan"
+              )
+            }
+            style={{ marginLeft: "0.5rem" }}
+            disabled={loading}
+          >
+            <option value="balanced_kmeans">Balanced K-Means</option>
+            <option value="dbscan">DBSCAN</option>
+          </select>
         </div>
+
+        {clusteringMethod === "balanced_kmeans" ? (
+          <div style={{ marginTop: "1rem" }}>
+            <label>Number of Groups:</label>
+            <input
+              type="number"
+              value={numGroups}
+              onChange={(e) => setNumGroups(Number(e.target.value))}
+              style={{ marginLeft: "0.5rem", width: "80px" }}
+              min={1}
+              disabled={loading}
+            />
+          </div>
+        ) : (
+          <>
+            <div style={{ marginTop: "1rem" }}>
+              <label>DBSCAN Min Samples:</label>
+                <input
+                  type="number"
+                  value={dbscanMinSamples}
+                  onChange={(e) => setDbscanMinSamples(Number(e.target.value))}
+                  style={{ marginLeft: "0.5rem", width: "80px" }}
+                  min={1}
+                  disabled={loading}
+                />
+            </div>
+            <div style={{ marginTop: "1rem" }}>
+              <label>DBSCAN Epsilon (meters):</label>
+                <input
+                  type="number"
+                  value={dbscanEpsilonMeters}
+                  onChange={(e) => setDbscanEpsilonMeters(Number(e.target.value))}
+                  style={{ marginLeft: "0.5rem", width: "100px" }}
+                  min={1}
+                  disabled={loading}
+                />
+            </div>
+          </>
+        )}
 
         <button
           onClick={handleUpload}
@@ -191,6 +280,12 @@ function App() {
           </p>
         )}
 
+        {loading && (
+          <p style={{ marginTop: "0.5rem", color: "#555" }}>
+            Upload in progress. Settings are locked until processing finishes.
+          </p>
+        )}
+
         {error && <p style={{ color: "red", marginTop: "0.5rem" }}>{error}</p>}
       </div>
 
@@ -200,6 +295,7 @@ function App() {
         <button
           onClick={() => setShowSaved(!showSaved)}
           style={{ marginBottom: "1rem" }}
+          disabled={loading}
         >
           {showSaved ? "Hide" : "Show"} Saved Groupings ({savedGroupings.length})
         </button>
@@ -234,6 +330,7 @@ function App() {
                         <button
                           onClick={() => handleDeleteGrouping(grouping.id)}
                           style={{ background: "#dc3545" }}
+                          disabled={loading}
                         >
                           Delete
                         </button>

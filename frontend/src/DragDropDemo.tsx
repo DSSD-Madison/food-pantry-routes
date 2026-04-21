@@ -15,6 +15,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import "./DragDropDemo.css";
+import GoogleRoutesMap from "./GoogleRoutesMap";
+import { prepareRoutesForExport } from "./routeExport";
 
 // -----------------------------
 // Types
@@ -25,7 +27,7 @@ export type RouteItem = {
   address: string;
   contact: string;
   priority: number;
-  raw: Record<string, any>;
+  raw: Record<string, unknown>;
 };
 
 export type CardData = {
@@ -34,11 +36,51 @@ export type CardData = {
   items: RouteItem[];
 };
 
+export type BackendBestRoutes = Record<
+  string,
+  Record<string, Array<Record<string, unknown>>> | "No Solution"
+>;
+
 type Props = {
   filename: string;
   columns: string[];
-  groups: Record<string, any>[][];
+  groups: Record<string, unknown>[][];
+  bestRoutes: BackendBestRoutes | null;
 };
+
+function getStringValue(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function getDisplayName(row: Record<string, unknown>, fallbackColumn?: string) {
+  const firstName = getStringValue(row["First"] ?? row["first"]).trim();
+  const lastName = getStringValue(row["Last"] ?? row["last"]).trim();
+
+  if (firstName && lastName) {
+    return `${firstName} ${lastName}`;
+  }
+
+  if (firstName) {
+    return firstName;
+  }
+
+  if (lastName) {
+    return lastName;
+  }
+
+  return getStringValue(
+    row["name"] ?? row["Name"] ?? (fallbackColumn ? row[fallbackColumn] : undefined),
+    "Unknown"
+  );
+}
 
 // -----------------------------
 // Sortable Item
@@ -106,7 +148,12 @@ function Card({ card }: { card: CardData }) {
 // -----------------------------
 // Main Component
 // -----------------------------
-export default function DragDropDemo({ filename, columns, groups }: Props) {
+export default function DragDropDemo({
+  filename,
+  columns,
+  groups,
+  bestRoutes,
+}: Props) {
   // ------------------------------------
   // Convert backend groups → RouteItem[]
   // ------------------------------------
@@ -116,9 +163,9 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
       title: `Group ${index + 1}`,
       items: group.map((row, rowIndex) => ({
         id: `g${index}-row${rowIndex}`,
-        name: row["name"] || row["Name"] || row[columns[0]] || "Unknown",
-        address: row["location"] || row["Location"] || "",
-        contact: row["contact"] || row["Contact"] || "",
+        name: getDisplayName(row, columns[0]),
+        address: getStringValue(row["location"] ?? row["Location"]),
+        contact: getStringValue(row["contact"] ?? row["Contact"]),
         priority: Number(row["priority"] || row["Priority"] || rowIndex + 1),
         raw: row, // keep original row for exporting
       })),
@@ -127,6 +174,10 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
 
   const [cards, setCards] = useState<CardData[]>(initialCards);
   const [activeItem, setActiveItem] = useState<RouteItem | null>(null);
+  const preparedRoutes = useMemo(
+    () => prepareRoutesForExport(cards, bestRoutes),
+    [bestRoutes, cards]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -216,6 +267,43 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportRouteLinks = () => {
+    const textSections = preparedRoutes.map((route) => {
+      const headerLines = [
+        route.title,
+        `Mapped stops: ${route.stops.length}`,
+        `Skipped stops: ${route.skippedStops.length}`,
+      ];
+
+      if (route.exportSegments.length === 0) {
+        return [
+          ...headerLines,
+          "Links: At least two mapped stops are required to export directions.",
+        ].join("\n");
+      }
+
+      const linkLines = route.exportSegments.map((segment, index) => {
+        const label =
+          route.exportSegments.length > 1
+            ? `Part ${index + 1}`
+            : "Route link";
+
+        return `${label}: ${segment.googleMapsUrl}`;
+      });
+
+      return [...headerLines, ...linkLines].join("\n");
+    });
+
+    const blob = new Blob([textSections.join("\n\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}-route-links.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // ------------------------------------
   // UI
   // ------------------------------------
@@ -223,13 +311,16 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
   return (
     <div className="demo-container">
       <div className="demo-header">
-        <h1>Route Planning – Drag & Drop</h1>
+        <h1>Route Planning Map</h1>
         <div className="button-row">
           <button className="export-button" onClick={() => (window.location.href = "/")}>
             Back to Home
           </button>
           <button className="export-button" onClick={handleExportJSON}>
             Export JSON
+          </button>
+          <button className="export-button" onClick={handleExportRouteLinks}>
+            Export Route Links
           </button>
         </div>
       </div>
@@ -240,23 +331,8 @@ export default function DragDropDemo({ filename, columns, groups }: Props) {
         {showMap ? "Hide Map" : "View Map"}
       </button>
       {showMap && (
-        <div
-          style={{
-            width: "100%",
-            height: "500px",
-            overflow: "hidden",
-            marginBottom: "1rem",
-          }}
-        >
-          <iframe
-            title="map"
-            width="100%"
-            height="100%"
-            style={{ border: 0, display: "block" }}
-            loading="lazy"
-            allowFullScreen
-            src="https://www.google.com/maps?q=Madison,WI&output=embed"
-          />
+        <div className="map-panel">
+          <GoogleRoutesMap routes={cards} bestRoutes={bestRoutes} />
         </div>
       )}
 
